@@ -36,6 +36,40 @@ interface KPI {
   change: number
 }
 
+interface Campaign {
+  id: string
+  name: string
+  status: string
+  type: string
+  sent: number
+  delivered: number
+  opened: number
+  clicked: number
+  converted: number
+  revenue: number
+  openRate: string
+  clickRate: string
+  sentAt: string
+}
+
+interface Flow {
+  id: string
+  name: string
+  status: string
+  triggered: number
+  opened: number
+  clicked: number
+  revenue: number
+  openRate: string
+  clickRate: string
+}
+
+interface EmailList {
+  id: string
+  name: string
+  profileCount: number
+}
+
 interface EmailData {
   connected: boolean
   account?: {
@@ -68,37 +102,9 @@ interface EmailData {
     value: number
     percent: number
   }>
-  campaigns?: Array<{
-    id: string
-    name: string
-    status: string
-    type: string
-    sent: number
-    delivered: number
-    opened: number
-    clicked: number
-    converted: number
-    revenue: number
-    openRate: string
-    clickRate: string
-    sentAt: string
-  }>
-  flows?: Array<{
-    id: string
-    name: string
-    status: string
-    triggered: number
-    opened: number
-    clicked: number
-    revenue: number
-    openRate: string
-    clickRate: string
-  }>
-  lists?: Array<{
-    id: string
-    name: string
-    profileCount: number
-  }>
+  campaigns?: Campaign[]
+  flows?: Flow[]
+  lists?: EmailList[]
 }
 
 // Date range options
@@ -200,7 +206,7 @@ const KPICard = ({
 }
 
 // Campaign Row Component
-const CampaignRow = ({ campaign }: { campaign: EmailData['campaigns'][0] }) => {
+const CampaignRow = ({ campaign }: { campaign: Campaign }) => {
   const statusColors: Record<string, string> = {
     sent: 'bg-green-500/20 text-green-400',
     scheduled: 'bg-blue-500/20 text-blue-400',
@@ -245,7 +251,7 @@ const CampaignRow = ({ campaign }: { campaign: EmailData['campaigns'][0] }) => {
 }
 
 // Flow Row Component  
-const FlowRow = ({ flow }: { flow: EmailData['flows'][0] }) => {
+const FlowRow = ({ flow }: { flow: Flow }) => {
   return (
     <tr className="border-b border-dark-700/50 hover:bg-dark-700/20 transition-colors">
       <td className="py-3 px-4">
