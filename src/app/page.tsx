@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import {
   Mail,
   Lock,
@@ -21,28 +22,19 @@ import {
 // Worder Logo Component
 const WorderLogo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
   const sizes = {
-    sm: { pill: 'w-2 h-5', circle: 'w-2 h-2', gap: 'gap-0.5' },
-    md: { pill: 'w-3 h-8', circle: 'w-3 h-3', gap: 'gap-0.5' },
-    lg: { pill: 'w-4 h-10', circle: 'w-4 h-4', gap: 'gap-1' },
+    sm: 28,
+    md: 40,
+    lg: 56,
   };
-  const s = sizes[size];
   
   return (
-    <div className={`flex items-end ${s.gap}`}>
-      {/* Orange pill (vertical) */}
-      <div className={`${s.pill} rounded-full bg-gradient-to-b from-primary-500 to-primary-600`} />
-      {/* Yellow circles */}
-      <div className={`flex flex-col ${s.gap} mb-0.5`}>
-        <div className={`flex ${s.gap}`}>
-          <div className={`${s.circle} rounded-full bg-gradient-to-br from-accent-400 to-accent-500`} />
-          <div className={`${s.circle} rounded-full bg-gradient-to-br from-accent-300 to-accent-400`} />
-        </div>
-        <div className={`flex ${s.gap}`}>
-          <div className={`${s.circle} rounded-full bg-gradient-to-br from-primary-400 to-primary-500`} />
-          <div className={`${s.circle} rounded-full bg-gradient-to-br from-accent-400 to-accent-500`} />
-        </div>
-      </div>
-    </div>
+    <Image
+      src="/logo.png"
+      alt="Worder"
+      width={sizes[size]}
+      height={sizes[size]}
+      className="object-contain"
+    />
   );
 };
 

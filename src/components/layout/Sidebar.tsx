@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
@@ -113,22 +114,13 @@ export function Sidebar() {
       {/* Logo */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-dark-700/50">
         <Link href="/dashboard" className="flex items-center gap-2">
-          {/* Worder Logo - Stylized W with pills and circles */}
-          <div className="flex items-end gap-0.5">
-            {/* Orange pill (vertical) */}
-            <div className="w-2.5 h-7 rounded-full bg-gradient-to-b from-primary-500 to-primary-600" />
-            {/* Yellow circles */}
-            <div className="flex flex-col gap-0.5 mb-0.5">
-              <div className="flex gap-0.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-accent-400 to-accent-500" />
-                <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-accent-300 to-accent-400" />
-              </div>
-              <div className="flex gap-0.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-primary-400 to-primary-500" />
-                <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-br from-accent-400 to-accent-500" />
-              </div>
-            </div>
-          </div>
+          <Image
+            src="/logo.png"
+            alt="Worder"
+            width={32}
+            height={32}
+            className="object-contain"
+          />
           <AnimatePresence>
             {!sidebarCollapsed && (
               <motion.span
