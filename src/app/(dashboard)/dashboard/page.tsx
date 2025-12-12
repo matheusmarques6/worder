@@ -570,23 +570,30 @@ export default function DashboardPage() {
               <button
                 onClick={async () => {
                   setIsRefreshing(true)
+                  console.log('[Worder] Iniciando sincronização...')
+                  
                   try {
                     const response = await fetch('/api/shopify/sync', { 
                       method: 'POST', 
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({}) 
                     })
+                    
+                    console.log('[Worder] Status:', response.status)
                     const data = await response.json()
+                    console.log('[Worder] Resposta:', data)
+                    
                     if (data.success) {
                       const revenue = data.totalRevenue ? formatCurrency(data.totalRevenue) : 'R$ 0,00'
-                      alert(`✅ Sincronização concluída!\n\n📦 ${data.totalOrders || 0} pedidos importados\n💰 ${revenue} de receita`)
+                      alert(`✅ Sincronização concluída!\n\n📦 ${data.totalOrders || 0} pedidos importados\n💰 ${revenue} de receita\n⏱️ ${data.timeSeconds}s`)
                       fetchDashboardData()
                     } else {
-                      alert(`❌ Erro: ${data.error || 'Erro ao sincronizar'}`)
+                      console.error('[Worder] Erro:', data.error)
+                      alert(`❌ Erro na sincronização:\n\n${data.error || 'Erro desconhecido'}\n\nAcesse /api/debug para mais detalhes.`)
                     }
-                  } catch (error) {
-                    console.error('Sync error:', error)
-                    alert('❌ Erro ao sincronizar. Verifique o console.')
+                  } catch (error: any) {
+                    console.error('[Worder] Exception:', error)
+                    alert(`❌ Erro de conexão:\n\n${error.message}\n\nVerifique o console (F12) para mais detalhes.`)
                   } finally {
                     setIsRefreshing(false)
                   }
@@ -595,11 +602,16 @@ export default function DashboardPage() {
                 className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
               >
                 {isRefreshing ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Sincronizando...
+                  </>
                 ) : (
-                  <RefreshCw className="w-4 h-4" />
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    Sincronizar Agora
+                  </>
                 )}
-                Sincronizar Agora
               </button>
             </motion.div>
           )}
