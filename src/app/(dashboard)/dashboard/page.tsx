@@ -316,7 +316,7 @@ const DatePickerModal = ({
 }
 
 export default function DashboardPage() {
-  const [selectedRange, setSelectedRange] = useState('30d')
+  const [selectedRange, setSelectedRange] = useState('all')
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showDatePicker, setShowDatePicker] = useState(false)
@@ -522,108 +522,6 @@ export default function DashboardPage() {
         />
       ) : (
         <>
-          {/* Sync Needed Alert - Mostra quando não tem pedidos OU quando tem dados históricos mas não no período */}
-          {hasStoreConnected && metrics && metrics.pedidos === 0 && totals && totals.pedidos > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-amber-500/20 rounded-lg">
-                    <AlertCircle className="w-5 h-5 text-amber-400" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-amber-400">Nenhum pedido no período selecionado</p>
-                    <p className="text-sm text-dark-400">
-                      Você tem {formatNumber(totals.pedidosPagos)} pedidos pagos no total ({formatCurrency(totals.receita)} de receita)
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedRange('all')}
-                  className="flex items-center gap-2 px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg text-sm font-medium transition-colors"
-                >
-                  Ver todo período
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Sync Alert - Mostra quando não tem nenhum dado ainda */}
-          {hasStoreConnected && totals && totals.pedidos === 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/20 rounded-lg">
-                  <RefreshCw className="w-5 h-5 text-blue-400" />
-                </div>
-                <div>
-                  <p className="font-medium text-blue-400">Sincronização necessária</p>
-                  <p className="text-sm text-dark-400">Clique para importar os pedidos do Shopify</p>
-                </div>
-              </div>
-              <button
-                onClick={async () => {
-                  setIsRefreshing(true)
-                  console.log('[Worder] Iniciando sincronização...')
-                  
-                  try {
-                    const response = await fetch('/api/shopify/sync', { 
-                      method: 'POST', 
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({}) 
-                    })
-                    
-                    console.log('[Worder] Status:', response.status)
-                    const data = await response.json()
-                    console.log('[Worder] Resposta:', data)
-                    
-                    if (data.success) {
-                      const revenue = data.totalRevenue ? formatCurrency(data.totalRevenue) : 'R$ 0,00'
-                      alert(`✅ Sincronização concluída!\n\n📦 ${data.totalOrders || 0} pedidos importados\n💰 ${revenue} de receita\n⏱️ ${data.timeSeconds}s`)
-                      fetchDashboardData()
-                    } else {
-                      console.error('[Worder] Erro:', data.error)
-                      alert(`❌ Erro na sincronização:\n\n${data.error || 'Erro desconhecido'}\n\nAcesse /api/debug para mais detalhes.`)
-                    }
-                  } catch (error: any) {
-                    console.error('[Worder] Exception:', error)
-                    alert(`❌ Erro de conexão:\n\n${error.message}\n\nVerifique o console (F12) para mais detalhes.`)
-                  } finally {
-                    setIsRefreshing(false)
-                  }
-                }}
-                disabled={isRefreshing}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-              >
-                {isRefreshing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Sincronizando...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-4 h-4" />
-                    Sincronizar Agora
-                  </>
-                )}
-              </button>
-            </motion.div>
-          )}
-
-          {/* Missing Integrations Alerts */}
-          {!integrations.klaviyo && (
-            <IntegrationAlert 
-              platform="Klaviyo" 
-              onConnect={() => window.location.href = '/settings?tab=integrations'} 
-            />
-          )}
-
           {/* Main KPI Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <MetricCard

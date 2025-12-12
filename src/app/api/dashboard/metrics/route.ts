@@ -15,7 +15,6 @@ const supabase = new Proxy({} as SupabaseClient, {
   get(_, prop) { return (getDb() as any)[prop]; }
 });
 
-// Helper to get date range from period
 function getDateRange(period: string): { startDate: Date; endDate: Date } {
   const today = new Date();
   today.setHours(23, 59, 59, 999);
@@ -49,59 +48,35 @@ function getDateRange(period: string): { startDate: Date; endDate: Date } {
       startDate.setHours(0, 0, 0, 0);
       break;
     case 'all':
-      // All time - start from 10 years ago
+    default:
+      // All time - 5 years
       startDate = new Date(today);
-      startDate.setFullYear(startDate.getFullYear() - 10);
+      startDate.setFullYear(startDate.getFullYear() - 5);
       startDate.setHours(0, 0, 0, 0);
       break;
-    default:
-      startDate = new Date(today);
-      startDate.setDate(startDate.getDate() - 6);
-      startDate.setHours(0, 0, 0, 0);
   }
 
   return { startDate, endDate: today };
 }
 
-// Helper to calculate percentage change
 function calcChange(current: number, previous: number): number {
   if (previous === 0) return current > 0 ? 100 : 0;
   return ((current - previous) / previous) * 100;
 }
 
-// Format date for display
 function formatDateLabel(date: Date): string {
   return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}`;
 }
 
 export async function GET(request: NextRequest) {
-  const range = request.nextUrl.searchParams.get('range') || '7d';
-  const customStart = request.nextUrl.searchParams.get('startDate');
-  const customEnd = request.nextUrl.searchParams.get('endDate');
+  // Default to 'all' to show all data
+  const range = request.nextUrl.searchParams.get('range') || 'all';
   const storeId = request.nextUrl.searchParams.get('storeId');
-  const debug = request.nextUrl.searchParams.get('debug') === 'true';
 
   try {
-    // Get date range
-    let startDate: Date, endDate: Date;
-    if (customStart && customEnd) {
-      startDate = new Date(customStart);
-      endDate = new Date(customEnd);
-      endDate.setHours(23, 59, 59, 999);
-    } else {
-      ({ startDate, endDate } = getDateRange(range));
-    }
+    const { startDate, endDate } = getDateRange(range);
 
-    // Calculate previous period for comparison
-    const periodMs = endDate.getTime() - startDate.getTime();
-    const prevEndDate = new Date(startDate.getTime() - 1);
-    const prevStartDate = new Date(prevEndDate.getTime() - periodMs);
-
-    console.log(`[Dashboard] Range: ${range}`);
-    console.log(`[Dashboard] Current period: ${startDate.toISOString()} to ${endDate.toISOString()}`);
-    console.log(`[Dashboard] Previous period: ${prevStartDate.toISOString()} to ${prevEndDate.toISOString()}`);
-
-    // Fetch Shopify stores
+    // Get stores
     const { data: stores } = await supabase
       .from('shopify_stores')
       .select('*')
@@ -109,199 +84,125 @@ export async function GET(request: NextRequest) {
 
     const hasStores = stores && stores.length > 0;
 
-    // Check Klaviyo connection
-    const { data: klaviyoAccount } = await supabase
-      .from('klaviyo_accounts')
-      .select('id, is_active')
-      .eq('is_active', true)
-      .limit(1)
-      .single();
-    
-    const hasKlaviyo = !!klaviyoAccount;
-
-    // If no stores, return empty state
     if (!hasStores) {
       return NextResponse.json({
         metrics: null,
+        totals: { pedidos: 0, pedidosPagos: 0, receita: 0 },
         chartData: [],
         stores: [],
-        integrations: {
-          shopify: false,
-          klaviyo: hasKlaviyo,
-          meta: false,
-          google: false,
-          tiktok: false,
-        },
+        integrations: { shopify: false, klaviyo: false, meta: false, google: false, tiktok: false },
       });
     }
 
-    // Fetch orders for all stores in the period
     const storeIds = stores.map(s => s.id);
-    const storeFilter = storeId || (storeIds.length > 0 ? storeIds : null);
 
     // ============================================
-    // FETCH ALL ORDERS (no date filter for totals)
+    // BUSCAR TODOS OS PEDIDOS (SEM FILTRO DE DATA)
     // ============================================
-    let allOrdersQuery = supabase
-      .from('shopify_orders')
-      .select('*');
+    let allOrdersQuery = supabase.from('shopify_orders').select('*');
     
-    if (storeFilter) {
-      allOrdersQuery = Array.isArray(storeFilter) 
-        ? allOrdersQuery.in('store_id', storeFilter)
-        : allOrdersQuery.eq('store_id', storeFilter);
+    if (storeId) {
+      allOrdersQuery = allOrdersQuery.eq('store_id', storeId);
+    } else if (storeIds.length > 0) {
+      allOrdersQuery = allOrdersQuery.in('store_id', storeIds);
     }
 
-    const { data: allOrders, error: allOrdersError } = await allOrdersQuery;
-    
-    if (allOrdersError) {
-      console.error('[Dashboard] Error fetching all orders:', allOrdersError);
-    }
+    const { data: allOrders } = await allOrdersQuery;
+    const orders = allOrders || [];
 
-    // Calculate total historical metrics (all time)
-    const totalHistorico = {
-      pedidos: (allOrders || []).length,
-      receita: 0,
-      paidOrders: 0,
-    };
+    // Calcular métricas de TODOS os pedidos
+    let totalReceita = 0;
+    let totalImpostos = 0;
+    let paidCount = 0;
 
-    (allOrders || []).forEach(order => {
-      if (['paid', 'partially_paid'].includes(order.financial_status)) {
-        totalHistorico.receita += parseFloat(order.total_price || '0');
-        totalHistorico.paidOrders++;
+    orders.forEach(order => {
+      const isPaid = ['paid', 'partially_paid'].includes(order.financial_status);
+      if (isPaid) {
+        totalReceita += parseFloat(order.total_price || '0');
+        totalImpostos += parseFloat(order.total_tax || '0');
+        paidCount++;
       }
     });
 
-    console.log(`[Dashboard] Total histórico: ${totalHistorico.pedidos} pedidos, R$ ${totalHistorico.receita.toFixed(2)} receita`);
+    // Custos estimados (30% da receita)
+    const custos = totalReceita * 0.30;
+    const lucro = totalReceita - custos - totalImpostos;
+    const margem = totalReceita > 0 ? (lucro / totalReceita) * 100 : 0;
+    const ticketMedio = paidCount > 0 ? totalReceita / paidCount : 0;
 
     // ============================================
-    // FETCH PERIOD ORDERS (with date filter)
+    // CHART DATA - Últimos 30 dias com dados
     // ============================================
-    let ordersQuery = supabase
-      .from('shopify_orders')
-      .select('*')
-      .gte('created_at', startDate.toISOString())
-      .lte('created_at', endDate.toISOString());
-    
-    if (storeFilter) {
-      ordersQuery = Array.isArray(storeFilter) 
-        ? ordersQuery.in('store_id', storeFilter)
-        : ordersQuery.eq('store_id', storeFilter);
-    }
-
-    const { data: orders } = await ordersQuery;
-
-    // Previous period orders
-    let prevOrdersQuery = supabase
-      .from('shopify_orders')
-      .select('total_price, total_tax, financial_status')
-      .gte('created_at', prevStartDate.toISOString())
-      .lte('created_at', prevEndDate.toISOString());
-    
-    if (storeFilter) {
-      prevOrdersQuery = Array.isArray(storeFilter) 
-        ? prevOrdersQuery.in('store_id', storeFilter)
-        : prevOrdersQuery.eq('store_id', storeFilter);
-    }
-
-    const { data: prevOrders } = await prevOrdersQuery;
-
-    console.log(`[Dashboard] Current period orders: ${(orders || []).length}`);
-    console.log(`[Dashboard] Previous period orders: ${(prevOrders || []).length}`);
-
-    // Calculate current period metrics (ONLY PAID ORDERS)
-    const currentMetrics = (orders || []).reduce((acc, order) => {
-      const isPaid = ['paid', 'partially_paid'].includes(order.financial_status);
-      const totalPrice = parseFloat(order.total_price || '0');
-      const totalTax = parseFloat(order.total_tax || '0');
-      
-      return {
-        receita: acc.receita + (isPaid ? totalPrice : 0),
-        impostos: acc.impostos + (isPaid ? totalTax : 0),
-        pedidos: acc.pedidos + 1,
-        pedidosPagos: acc.pedidosPagos + (isPaid ? 1 : 0),
-      };
-    }, { receita: 0, impostos: 0, pedidos: 0, pedidosPagos: 0 });
-
-    // Calculate previous period metrics
-    const prevMetrics = (prevOrders || []).reduce((acc, order) => {
-      const isPaid = ['paid', 'partially_paid'].includes(order.financial_status);
-      return {
-        receita: acc.receita + (isPaid ? parseFloat(order.total_price || '0') : 0),
-        impostos: acc.impostos + (isPaid ? parseFloat(order.total_tax || '0') : 0),
-        pedidos: acc.pedidos + 1,
-      };
-    }, { receita: 0, impostos: 0, pedidos: 0 });
-
-    console.log(`[Dashboard] Current: R$ ${currentMetrics.receita.toFixed(2)} (${currentMetrics.pedidosPagos} paid orders)`);
-    console.log(`[Dashboard] Previous: R$ ${prevMetrics.receita.toFixed(2)}`);
-
-    // Fetch marketing spend (ads) for the period
-    const [metaSpend, googleSpend, tiktokSpend] = await Promise.all([
-      supabase.from('meta_insights').select('spend').gte('date', startDate.toISOString().split('T')[0]).lte('date', endDate.toISOString().split('T')[0]),
-      supabase.from('google_ads_metrics').select('cost').gte('date', startDate.toISOString().split('T')[0]).lte('date', endDate.toISOString().split('T')[0]),
-      supabase.from('tiktok_metrics').select('spend').gte('date', startDate.toISOString().split('T')[0]).lte('date', endDate.toISOString().split('T')[0]),
-    ]);
-
-    const totalMarketing = 
-      (metaSpend.data || []).reduce((acc, m) => acc + parseFloat(m.spend || '0'), 0) +
-      (googleSpend.data || []).reduce((acc, g) => acc + parseFloat(g.cost || '0'), 0) +
-      (tiktokSpend.data || []).reduce((acc, t) => acc + parseFloat(t.spend || '0'), 0);
-
-    // Estimate product costs (30% of revenue as placeholder)
-    const custos = currentMetrics.receita * 0.30;
-    const prevCustos = prevMetrics.receita * 0.30;
-
-    // Calculate derived metrics
-    const lucro = currentMetrics.receita - custos - totalMarketing - currentMetrics.impostos;
-    const prevLucro = prevMetrics.receita - prevCustos - prevMetrics.impostos;
-    const margem = currentMetrics.receita > 0 ? (lucro / currentMetrics.receita) * 100 : 0;
-    const prevMargem = prevMetrics.receita > 0 ? (prevLucro / prevMetrics.receita) * 100 : 0;
-    const ticketMedio = currentMetrics.pedidosPagos > 0 ? currentMetrics.receita / currentMetrics.pedidosPagos : 0;
-    const prevTicketMedio = prevMetrics.pedidos > 0 ? prevMetrics.receita / prevMetrics.pedidos : 0;
-
-    // Build chart data (daily breakdown)
     const chartData: any[] = [];
-    const dayMs = 24 * 60 * 60 * 1000;
     
-    for (let d = new Date(startDate); d <= endDate; d = new Date(d.getTime() + dayMs)) {
-      const dayStart = new Date(d);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(d);
-      dayEnd.setHours(23, 59, 59, 999);
+    // Encontrar range de datas dos pedidos
+    const orderDates = orders
+      .filter(o => ['paid', 'partially_paid'].includes(o.financial_status))
+      .map(o => new Date(o.created_at))
+      .sort((a, b) => a.getTime() - b.getTime());
 
-      const dayOrders = (orders || []).filter(o => {
-        const orderDate = new Date(o.created_at);
-        return orderDate >= dayStart && orderDate <= dayEnd;
-      });
+    if (orderDates.length > 0) {
+      // Pegar últimos 30 dias com dados ou menos
+      const minDate = orderDates[0];
+      const maxDate = orderDates[orderDates.length - 1];
+      
+      // Gerar dados por dia
+      const dayMs = 24 * 60 * 60 * 1000;
+      const chartStart = new Date(Math.max(minDate.getTime(), maxDate.getTime() - 30 * dayMs));
+      
+      for (let d = new Date(chartStart); d <= maxDate; d = new Date(d.getTime() + dayMs)) {
+        const dayStart = new Date(d);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(d);
+        dayEnd.setHours(23, 59, 59, 999);
 
-      // Only count paid orders for revenue
-      const paidDayOrders = dayOrders.filter(o => ['paid', 'partially_paid'].includes(o.financial_status));
-      const dayReceita = paidDayOrders.reduce((acc, o) => acc + parseFloat(o.total_price || '0'), 0);
-      const dayImpostos = paidDayOrders.reduce((acc, o) => acc + parseFloat(o.total_tax || '0'), 0);
-      const dayCustos = dayReceita * 0.30;
-      const numDays = Math.ceil((endDate.getTime() - startDate.getTime()) / dayMs);
-      const dayMarketing = totalMarketing / Math.max(numDays, 1);
-      const dayLucro = dayReceita - dayCustos - dayMarketing - dayImpostos;
+        const dayOrders = orders.filter(o => {
+          const orderDate = new Date(o.created_at);
+          return orderDate >= dayStart && orderDate <= dayEnd && ['paid', 'partially_paid'].includes(o.financial_status);
+        });
 
-      chartData.push({
-        date: formatDateLabel(d),
-        receita: dayReceita,
-        custos: dayCustos,
-        marketing: dayMarketing,
-        impostos: dayImpostos,
-        lucro: Math.max(0, dayLucro),
-        pedidos: dayOrders.length,
-        pedidosPagos: paidDayOrders.length,
-      });
+        const dayReceita = dayOrders.reduce((acc, o) => acc + parseFloat(o.total_price || '0'), 0);
+        const dayImpostos = dayOrders.reduce((acc, o) => acc + parseFloat(o.total_tax || '0'), 0);
+        const dayCustos = dayReceita * 0.30;
+        const dayLucro = dayReceita - dayCustos - dayImpostos;
+
+        chartData.push({
+          date: formatDateLabel(d),
+          receita: dayReceita,
+          custos: dayCustos,
+          marketing: 0,
+          impostos: dayImpostos,
+          lucro: Math.max(0, dayLucro),
+          pedidos: dayOrders.length,
+        });
+      }
     }
 
-    // Build stores data
+    // Se não tem dados no chart, criar dados vazios para os últimos 7 dias
+    if (chartData.length === 0) {
+      const dayMs = 24 * 60 * 60 * 1000;
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(Date.now() - i * dayMs);
+        chartData.push({
+          date: formatDateLabel(d),
+          receita: 0,
+          custos: 0,
+          marketing: 0,
+          impostos: 0,
+          lucro: 0,
+          pedidos: 0,
+        });
+      }
+    }
+
+    // ============================================
+    // STORES DATA
+    // ============================================
     const storesData = stores.map(store => {
-      const storeOrders = (orders || []).filter(o => o.store_id === store.id);
+      const storeOrders = orders.filter(o => o.store_id === store.id);
       const paidStoreOrders = storeOrders.filter(o => ['paid', 'partially_paid'].includes(o.financial_status));
       const storeReceita = paidStoreOrders.reduce((acc, o) => acc + parseFloat(o.total_price || '0'), 0);
-      const storeCustos = storeReceita * 0.30 + (totalMarketing / stores.length);
+      const storeCustos = storeReceita * 0.30;
       const storeLucro = storeReceita - storeCustos;
       
       return {
@@ -318,95 +219,64 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Check integration status
-    const integrations = {
-      shopify: hasStores,
-      klaviyo: hasKlaviyo,
-      meta: (metaSpend.data || []).length > 0,
-      google: (googleSpend.data || []).length > 0,
-      tiktok: (tiktokSpend.data || []).length > 0,
-    };
+    // Check integrations
+    const { data: klaviyoAccount } = await supabase
+      .from('klaviyo_accounts')
+      .select('id')
+      .eq('is_active', true)
+      .limit(1)
+      .single();
 
-    // Build response
-    const response: any = {
+    return NextResponse.json({
       metrics: {
-        receita: currentMetrics.receita,
-        receitaChange: calcChange(currentMetrics.receita, prevMetrics.receita),
+        receita: totalReceita,
+        receitaChange: 0,
         custos,
-        custosChange: calcChange(custos, prevCustos),
-        marketing: totalMarketing,
+        custosChange: 0,
+        marketing: 0,
         marketingChange: 0,
-        impostos: currentMetrics.impostos,
-        impostosChange: calcChange(currentMetrics.impostos, prevMetrics.impostos),
+        impostos: totalImpostos,
+        impostosChange: 0,
         margem,
-        margemChange: margem - prevMargem,
+        margemChange: 0,
         lucro,
-        lucroChange: calcChange(lucro, prevLucro),
-        pedidos: currentMetrics.pedidos,
-        pedidosPagos: currentMetrics.pedidosPagos,
-        pedidosChange: calcChange(currentMetrics.pedidos, prevMetrics.pedidos),
+        lucroChange: 0,
+        pedidos: orders.length,
+        pedidosPagos: paidCount,
+        pedidosChange: 0,
         ticketMedio,
-        ticketMedioChange: calcChange(ticketMedio, prevTicketMedio),
+        ticketMedioChange: 0,
       },
-      // Total histórico (all time)
       totals: {
-        pedidos: totalHistorico.pedidos,
-        pedidosPagos: totalHistorico.paidOrders,
-        receita: totalHistorico.receita,
+        pedidos: orders.length,
+        pedidosPagos: paidCount,
+        receita: totalReceita,
       },
       chartData,
       stores: storesData,
-      integrations,
+      integrations: {
+        shopify: hasStores,
+        klaviyo: !!klaviyoAccount,
+        meta: false,
+        google: false,
+        tiktok: false,
+      },
       period: {
         start: startDate.toISOString(),
         end: endDate.toISOString(),
         range,
       },
-    };
-
-    // Add debug info if requested
-    if (debug) {
-      const sampleOrders = (allOrders || []).slice(0, 5).map(o => ({
-        id: o.shopify_order_id,
-        name: o.name,
-        total_price: o.total_price,
-        financial_status: o.financial_status,
-        created_at: o.created_at,
-      }));
-
-      const statusCounts: Record<string, number> = {};
-      (allOrders || []).forEach(o => {
-        statusCounts[o.financial_status || 'unknown'] = (statusCounts[o.financial_status || 'unknown'] || 0) + 1;
-      });
-
-      response.debug = {
-        totalOrdersInDb: (allOrders || []).length,
-        ordersInPeriod: (orders || []).length,
-        statusBreakdown: statusCounts,
-        sampleOrders,
-        dateRange: {
-          start: startDate.toISOString(),
-          end: endDate.toISOString(),
-        },
-      };
-    }
-
-    return NextResponse.json(response);
+    });
     
   } catch (error: any) {
     console.error('Dashboard metrics error:', error);
     return NextResponse.json({ 
-      error: error.message || 'Failed to fetch metrics',
+      error: error.message,
       metrics: null,
+      totals: { pedidos: 0, pedidosPagos: 0, receita: 0 },
       chartData: [],
       stores: [],
-      integrations: {
-        shopify: false,
-        klaviyo: false,
-        meta: false,
-        google: false,
-        tiktok: false,
-      },
+      integrations: { shopify: false, klaviyo: false, meta: false, google: false, tiktok: false },
     }, { status: 500 });
   }
 }
