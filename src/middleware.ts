@@ -3,10 +3,10 @@ import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // Routes that don't require authentication
-const publicRoutes = ['/', '/api/auth', '/api/shopify', '/api/klaviyo', '/api/whatsapp'];
+const publicRoutes = ['/', '/signup', '/api/auth', '/api/shopify', '/api/klaviyo', '/api/whatsapp'];
 
 // Routes that should redirect to dashboard if already authenticated
-const authRoutes = ['/'];
+const authRoutes = ['/', '/signup'];
 
 // Check if we're in dev mode
 const isDevMode = process.env.NODE_ENV === 'development' || process.env.DEV_AUTH_BYPASS === 'true';

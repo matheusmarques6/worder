@@ -195,11 +195,32 @@ async function handleSignup(
   // The trigger handle_new_user() in the database will automatically create
   // the organization, profile, and default pipeline
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     user: authData.user,
     session: authData.session,
-    message: 'Account created successfully. Please check your email to verify your account.',
+    message: 'Conta criada com sucesso!',
   });
+
+  // If session exists, set auth cookies (auto-login)
+  if (authData.session) {
+    response.cookies.set('sb-access-token', authData.session.access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7, // 1 week
+      path: '/',
+    });
+
+    response.cookies.set('sb-refresh-token', authData.session.refresh_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: '/',
+    });
+  }
+
+  return response;
 }
 
 async function handleLogout(supabase: SupabaseClient, { accessToken }: { accessToken?: string }) {

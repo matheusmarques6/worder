@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import {
   Mail,
   Lock,
@@ -204,9 +205,9 @@ export default function LoginPage() {
           {/* Sign Up Link */}
           <p className="mt-6 text-center text-dark-400">
             Não tem uma conta?{' '}
-            <a href="#" className="text-primary-400 hover:text-primary-300 transition-colors font-medium">
-              Fale com vendas
-            </a>
+            <Link href="/signup" className="text-primary-400 hover:text-primary-300 transition-colors font-medium">
+              Criar conta grátis
+            </Link>
           </p>
         </motion.div>
       </div>
