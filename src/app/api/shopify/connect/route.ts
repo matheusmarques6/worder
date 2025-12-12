@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClient } from '@/lib/api-utils';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 
 let _supabase: SupabaseClient | null = null;
 function getDb(): SupabaseClient {
@@ -14,6 +15,43 @@ function getDb(): SupabaseClient {
 const supabase = new Proxy({} as SupabaseClient, {
   get(_, prop) { return (getDb() as any)[prop]; }
 });
+
+// Get or create default organization for demo purposes
+async function getOrCreateDefaultOrg(): Promise<string> {
+  try {
+    // Try to get existing default org
+    const { data: existingOrg } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('name', 'Default Organization')
+      .single();
+
+    if (existingOrg) {
+      return existingOrg.id;
+    }
+
+    // Create new organization
+    const { data: newOrg, error } = await supabase
+      .from('organizations')
+      .insert({
+        name: 'Default Organization',
+        slug: 'default-org',
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      // If organizations table doesn't exist or other error, generate UUID
+      console.warn('Could not create organization:', error.message);
+      return randomUUID();
+    }
+
+    return newOrg.id;
+  } catch (err) {
+    // Fallback to random UUID
+    return randomUUID();
+  }
+}
 
 // Connect store via Access Token (custom app method)
 export async function POST(request: NextRequest) {
@@ -59,9 +97,11 @@ export async function POST(request: NextRequest) {
 
     const { shop: shopData } = await shopResponse.json();
 
-    // Get organization ID from session or use provided
-    // In production, get this from authenticated user session
-    const orgId = organizationId || 'demo-org-id';
+    // Get organization ID from request or create/get default
+    let orgId = organizationId;
+    if (!orgId) {
+      orgId = await getOrCreateDefaultOrg();
+    }
 
     // Check if store already exists
     const { data: existingStore } = await supabase
