@@ -1,0 +1,42 @@
+# ===========================================
+# WORDER - Environment Variables
+# ===========================================
+
+# ===========================================
+# Supabase (CONFIGURED ✅)
+# ===========================================
+NEXT_PUBLIC_SUPABASE_URL=https://rqpmoavktzvxfcfsdkcc.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_rY8Q3kwt5EHcu1ZTvWuJFg_Y__hvyNi
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_BjGTjrh_AmhjPuYlvKixNw_IuF41a_-
+
+# ===========================================
+# Application
+# ===========================================
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_APP_NAME=Worder
+
+# ===========================================
+# Shopify (Optional - configure later)
+# ===========================================
+SHOPIFY_CLIENT_ID=
+SHOPIFY_CLIENT_SECRET=
+SHOPIFY_WEBHOOK_SECRET=
+
+# ===========================================
+# Klaviyo (Optional - configure later)
+# ===========================================
+KLAVIYO_PRIVATE_API_KEY=
+KLAVIYO_PUBLIC_API_KEY=
+
+# ===========================================
+# WhatsApp Business API (Optional - configure later)
+# ===========================================
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_BUSINESS_ACCOUNT_ID=
+WHATSAPP_VERIFY_TOKEN=worder-webhook-verify-token
+
+# ===========================================
+# Security
+# ===========================================
+ENCRYPTION_KEY=worder-encryption-key-change-in-production
