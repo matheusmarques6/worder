@@ -309,22 +309,11 @@ export default function SettingsPage() {
     try {
       setIsLoading(true);
       
-      // Fetch real data from APIs
-      const [shopifyRes, klaviyoRes] = await Promise.all([
-        fetch('/api/shopify/connect').catch(() => null),
-        fetch('/api/klaviyo').catch(() => null),
-      ]);
-
-      // Build integrations list with real data
-      const shopifyStores = stores;
-      const hasShopify = shopifyStores.length > 0;
+      // Fetch real status from API
+      const response = await fetch('/api/integrations/status');
+      const data = await response.json();
       
-      // Calculate stats from stores
-      const shopifyStats = hasShopify ? {
-        Orders: shopifyStores.reduce((acc, s) => acc + (s.totalOrders || 0), 0).toLocaleString(),
-        Customers: '-',
-        Products: '-',
-      } : undefined;
+      const status = data.integrations || {};
 
       const integrationsData: Integration[] = [
         // Ads section
@@ -333,8 +322,10 @@ export default function SettingsPage() {
           name: 'Facebook Ads',
           description: 'Acompanhe campanhas, ROAS e performance de anúncios',
           icon: FacebookIcon,
-          connected: false, // Will be updated from API
-          status: 'disconnected',
+          connected: status.meta?.connected || false,
+          status: status.meta?.status || 'disconnected',
+          lastSync: status.meta?.lastSync,
+          stats: status.meta?.accountName ? { Account: status.meta.accountName } : undefined,
           category: 'ads',
         },
         {
@@ -342,8 +333,10 @@ export default function SettingsPage() {
           name: 'Google Ads',
           description: 'Sincronize campanhas Search, Shopping e Display',
           icon: GoogleIcon,
-          connected: false,
-          status: 'disconnected',
+          connected: status.google?.connected || false,
+          status: status.google?.status || 'disconnected',
+          lastSync: status.google?.lastSync,
+          stats: status.google?.accountName ? { Account: status.google.accountName } : undefined,
           category: 'ads',
         },
         {
@@ -351,8 +344,10 @@ export default function SettingsPage() {
           name: 'TikTok Ads',
           description: 'Monitore campanhas e performance de vídeos',
           icon: TikTokIcon,
-          connected: false,
-          status: 'disconnected',
+          connected: status.tiktok?.connected || false,
+          status: status.tiktok?.status || 'disconnected',
+          lastSync: status.tiktok?.lastSync,
+          stats: status.tiktok?.accountName ? { Account: status.tiktok.accountName } : undefined,
           category: 'ads',
         },
         // E-commerce section
@@ -361,10 +356,10 @@ export default function SettingsPage() {
           name: 'Shopify',
           description: 'Sincronize pedidos, clientes e produtos',
           icon: ShopifyIcon,
-          connected: hasShopify,
-          status: hasShopify ? 'healthy' : 'disconnected',
-          lastSync: hasShopify ? 'Agora' : undefined,
-          stats: shopifyStats,
+          connected: status.shopify?.connected || stores.length > 0,
+          status: (status.shopify?.connected || stores.length > 0) ? 'healthy' : 'disconnected',
+          lastSync: status.shopify?.lastSync || (stores.length > 0 ? 'Agora' : undefined),
+          stats: status.shopify?.stats || (stores.length > 0 ? { Orders: '0', Customers: '-', Products: '-' } : undefined),
           category: 'ecommerce',
         },
         // Email Marketing section
@@ -373,8 +368,10 @@ export default function SettingsPage() {
           name: 'Klaviyo',
           description: 'Importe campanhas, flows e métricas de email',
           icon: KlaviyoIcon,
-          connected: false, // Will be updated
-          status: 'disconnected',
+          connected: status.klaviyo?.connected || false,
+          status: status.klaviyo?.status || 'disconnected',
+          lastSync: status.klaviyo?.lastSync,
+          stats: status.klaviyo?.accountName ? { Account: status.klaviyo.accountName } : undefined,
           category: 'email',
         },
         // Messaging section
@@ -383,8 +380,10 @@ export default function SettingsPage() {
           name: 'WhatsApp Business',
           description: 'Envie mensagens e gerencie conversas',
           icon: WhatsAppIcon,
-          connected: false,
-          status: 'disconnected',
+          connected: status.whatsapp?.connected || false,
+          status: status.whatsapp?.status || 'disconnected',
+          lastSync: status.whatsapp?.lastSync,
+          stats: status.whatsapp?.phoneNumber ? { Phone: status.whatsapp.phoneNumber } : undefined,
           category: 'messaging',
         },
       ];
@@ -484,19 +483,10 @@ export default function SettingsPage() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        setIntegrations(prev => prev.map(i => 
-          i.id === 'klaviyo' 
-            ? { 
-                ...i, 
-                connected: true, 
-                status: 'healthy', 
-                lastSync: 'Agora',
-                stats: { Account: data.account?.name || 'Conectado' }
-              }
-            : i
-        ));
         setShowKlaviyoModal(false);
         alert('Klaviyo conectado com sucesso!');
+        // Refresh integrations to get real status
+        fetchIntegrations();
       } else {
         alert(data.error || 'Erro ao conectar Klaviyo');
       }

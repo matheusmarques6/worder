@@ -93,6 +93,16 @@ export async function GET(request: NextRequest) {
 
     const hasStores = stores && stores.length > 0;
 
+    // Check Klaviyo connection
+    const { data: klaviyoAccount } = await supabase
+      .from('klaviyo_accounts')
+      .select('id, is_active')
+      .eq('is_active', true)
+      .limit(1)
+      .single();
+    
+    const hasKlaviyo = !!klaviyoAccount;
+
     // If no stores, return empty state
     if (!hasStores) {
       return NextResponse.json({
@@ -101,7 +111,7 @@ export async function GET(request: NextRequest) {
         stores: [],
         integrations: {
           shopify: false,
-          klaviyo: false,
+          klaviyo: hasKlaviyo,
           meta: false,
           google: false,
           tiktok: false,
@@ -242,7 +252,7 @@ export async function GET(request: NextRequest) {
     // Check integration status
     const integrations = {
       shopify: hasStores,
-      klaviyo: false, // TODO: Check actual connection
+      klaviyo: hasKlaviyo,
       meta: (metaSpend.data || []).length > 0,
       google: (googleSpend.data || []).length > 0,
       tiktok: (tiktokSpend.data || []).length > 0,
