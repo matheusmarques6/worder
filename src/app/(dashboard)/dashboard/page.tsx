@@ -85,12 +85,20 @@ interface IntegrationStatus {
   tiktok: boolean
 }
 
+interface TotalsData {
+  pedidos: number
+  pedidosPagos: number
+  receita: number
+}
+
 // Date range options
 const dateRanges = [
   { id: 'today', label: 'Hoje' },
   { id: 'yesterday', label: 'Ontem' },
   { id: '7d', label: '7 Dias' },
   { id: '30d', label: 'Este mês' },
+  { id: '90d', label: '90 Dias' },
+  { id: 'all', label: 'Todo período' },
   { id: 'custom', label: 'Customizado' },
 ]
 
@@ -328,6 +336,7 @@ export default function DashboardPage() {
     google: false,
     tiktok: false,
   })
+  const [totals, setTotals] = useState<TotalsData | null>(null)
 
   // Fetch dashboard data
   const fetchDashboardData = useCallback(async () => {
@@ -352,6 +361,7 @@ export default function DashboardPage() {
         setMetrics(data.metrics || null)
         setChartData(data.chartData || [])
         setStoresMetrics(data.stores || [])
+        setTotals(data.totals || null)
         setIntegrations(data.integrations || {
           shopify: stores.length > 0,
           klaviyo: false,
@@ -512,8 +522,37 @@ export default function DashboardPage() {
         />
       ) : (
         <>
-          {/* Sync Needed Alert */}
-          {hasStoreConnected && metrics && metrics.pedidos === 0 && (
+          {/* Sync Needed Alert - Mostra quando não tem pedidos OU quando tem dados históricos mas não no período */}
+          {hasStoreConnected && metrics && metrics.pedidos === 0 && totals && totals.pedidos > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-500/20 rounded-lg">
+                    <AlertCircle className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-amber-400">Nenhum pedido no período selecionado</p>
+                    <p className="text-sm text-dark-400">
+                      Você tem {formatNumber(totals.pedidosPagos)} pedidos pagos no total ({formatCurrency(totals.receita)} de receita)
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedRange('all')}
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Ver todo período
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Sync Alert - Mostra quando não tem nenhum dado ainda */}
+          {hasStoreConnected && totals && totals.pedidos === 0 && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -532,17 +571,22 @@ export default function DashboardPage() {
                 onClick={async () => {
                   setIsRefreshing(true)
                   try {
-                    const response = await fetch('/api/shopify/sync', { method: 'POST', body: JSON.stringify({}) })
+                    const response = await fetch('/api/shopify/sync', { 
+                      method: 'POST', 
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({}) 
+                    })
                     const data = await response.json()
                     if (data.success) {
-                      alert(`Sincronização concluída!\n${data.totalOrders || 0} pedidos importados.`)
+                      const revenue = data.totalRevenue ? formatCurrency(data.totalRevenue) : 'R$ 0,00'
+                      alert(`✅ Sincronização concluída!\n\n📦 ${data.totalOrders || 0} pedidos importados\n💰 ${revenue} de receita`)
                       fetchDashboardData()
                     } else {
-                      alert(data.error || 'Erro ao sincronizar')
+                      alert(`❌ Erro: ${data.error || 'Erro ao sincronizar'}`)
                     }
                   } catch (error) {
                     console.error('Sync error:', error)
-                    alert('Erro ao sincronizar. Verifique o console.')
+                    alert('❌ Erro ao sincronizar. Verifique o console.')
                   } finally {
                     setIsRefreshing(false)
                   }

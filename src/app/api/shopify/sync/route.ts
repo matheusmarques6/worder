@@ -15,75 +15,177 @@ const supabase = new Proxy({} as SupabaseClient, {
   get(_, prop) { return (getDb() as any)[prop]; }
 });
 
-const SHOPIFY_API_VERSION = '2024-01';
+const SHOPIFY_API_VERSION = '2024-10';
 
-// Shopify API helper with rate limiting
-async function shopifyFetch(shopDomain: string, accessToken: string, endpoint: string) {
-  const response = await fetch(
-    `https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}${endpoint}`,
-    {
-      headers: {
-        'X-Shopify-Access-Token': accessToken,
-        'Content-Type': 'application/json',
-      },
+// ============================================
+// SHOPIFY API HELPER WITH RATE LIMITING
+// ============================================
+interface ShopifyResponse {
+  data: any;
+  nextPageUrl: string | null;
+  rateLimitRemaining: number;
+}
+
+async function shopifyFetch(
+  shopDomain: string, 
+  accessToken: string, 
+  endpoint: string,
+  retryCount = 0
+): Promise<ShopifyResponse> {
+  const maxRetries = 3;
+  const url = endpoint.startsWith('http') 
+    ? endpoint 
+    : `https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}${endpoint}`;
+  
+  console.log(`[Shopify API] Fetching: ${url.substring(0, 100)}...`);
+  
+  const response = await fetch(url, {
+    headers: {
+      'X-Shopify-Access-Token': accessToken,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  // Handle rate limiting (429)
+  if (response.status === 429) {
+    if (retryCount >= maxRetries) {
+      throw new Error('Rate limit exceeded after max retries');
     }
-  );
+    
+    const retryAfter = response.headers.get('Retry-After');
+    const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 2000 * (retryCount + 1);
+    
+    console.log(`[Shopify API] Rate limited. Waiting ${waitTime}ms before retry ${retryCount + 1}...`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+    
+    return shopifyFetch(shopDomain, accessToken, endpoint, retryCount + 1);
+  }
 
   if (!response.ok) {
     const error = await response.text();
+    console.error(`[Shopify API] Error ${response.status}:`, error);
     throw new Error(`Shopify API error (${response.status}): ${error}`);
   }
 
-  return response.json();
+  // Extract pagination from Link header
+  // Format: <https://store.myshopify.com/admin/api/2024-10/orders.json?page_info=xxx>; rel="next"
+  const linkHeader = response.headers.get('Link');
+  let nextPageUrl: string | null = null;
+  
+  if (linkHeader) {
+    const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+    if (nextMatch) {
+      nextPageUrl = nextMatch[1];
+    }
+  }
+
+  // Get rate limit info
+  const rateLimitHeader = response.headers.get('X-Shopify-Shop-Api-Call-Limit');
+  let rateLimitRemaining = 40;
+  if (rateLimitHeader) {
+    const [used, total] = rateLimitHeader.split('/').map(Number);
+    rateLimitRemaining = total - used;
+    console.log(`[Shopify API] Rate limit: ${used}/${total} (${rateLimitRemaining} remaining)`);
+  }
+
+  // If we're getting close to rate limit, slow down
+  if (rateLimitRemaining < 5) {
+    console.log(`[Shopify API] Approaching rate limit, waiting 1s...`);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  const data = await response.json();
+  
+  return { data, nextPageUrl, rateLimitRemaining };
 }
 
-// Sync all orders (with pagination)
-async function syncOrders(storeId: string, shopDomain: string, accessToken: string): Promise<number> {
-  console.log(`[Shopify Sync] Starting orders sync for ${shopDomain}...`);
+// ============================================
+// SYNC ORDERS - CORRECT PAGINATION
+// ============================================
+async function syncOrders(storeId: string, shopDomain: string, accessToken: string): Promise<{
+  count: number;
+  revenue: number;
+  paidCount: number;
+}> {
+  console.log(`\n[Shopify Sync] ========== STARTING ORDERS SYNC ==========`);
+  console.log(`[Shopify Sync] Store: ${shopDomain}`);
   
   let allOrders: any[] = [];
-  let pageInfo: string | null = null;
+  let nextUrl: string | null = `/orders.json?status=any&limit=250`;
   let pageCount = 0;
-  const maxPages = 20; // Max 5000 orders (250 per page)
+  const maxPages = 40; // Max 10,000 orders (250 per page)
 
-  do {
-    let endpoint = '/orders.json?status=any&limit=250';
-    if (pageInfo) {
-      endpoint = `/orders.json?limit=250&page_info=${pageInfo}`;
-    }
-
-    const response = await shopifyFetch(shopDomain, accessToken, endpoint);
-    const orders = response.orders || [];
-    allOrders = [...allOrders, ...orders];
+  while (nextUrl && pageCount < maxPages) {
     pageCount++;
-
-    // Check for next page using Link header pattern
-    // Shopify returns pagination info in the response
-    if (orders.length === 250 && pageCount < maxPages) {
-      // Get next page cursor - Shopify uses cursor-based pagination
-      // For simplicity, we'll use created_at_min for pagination
-      const lastOrder = orders[orders.length - 1];
-      if (lastOrder) {
-        const lastCreatedAt = new Date(lastOrder.created_at);
-        lastCreatedAt.setMilliseconds(lastCreatedAt.getMilliseconds() + 1);
-        endpoint = `/orders.json?status=any&limit=250&created_at_max=${lastOrder.created_at}`;
-        
-        const nextResponse = await shopifyFetch(shopDomain, accessToken, endpoint);
-        if (nextResponse.orders && nextResponse.orders.length > 0) {
-          allOrders = [...allOrders, ...nextResponse.orders];
-          pageCount++;
-        } else {
-          break;
-        }
-      } else {
-        break;
-      }
-    } else {
-      break;
+    console.log(`[Shopify Sync] Fetching page ${pageCount}...`);
+    
+    const { data, nextPageUrl } = await shopifyFetch(shopDomain, accessToken, nextUrl);
+    const orders = data.orders || [];
+    
+    console.log(`[Shopify Sync] Page ${pageCount}: Got ${orders.length} orders`);
+    
+    if (orders.length === 0) break;
+    
+    // Log first order for debugging
+    if (pageCount === 1 && orders.length > 0) {
+      const firstOrder = orders[0];
+      console.log(`[Shopify Sync] Sample order:`, {
+        id: firstOrder.id,
+        name: firstOrder.name,
+        total_price: firstOrder.total_price,
+        financial_status: firstOrder.financial_status,
+        created_at: firstOrder.created_at,
+      });
     }
-  } while (pageCount < maxPages);
+    
+    allOrders = [...allOrders, ...orders];
+    nextUrl = nextPageUrl;
+    
+    // Small delay between pages to be nice to API
+    if (nextUrl) {
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+  }
 
-  console.log(`[Shopify Sync] Fetched ${allOrders.length} orders`);
+  console.log(`[Shopify Sync] Total orders fetched: ${allOrders.length}`);
+
+  // Analyze orders before saving
+  const analysis = {
+    total: allOrders.length,
+    paid: 0,
+    pending: 0,
+    refunded: 0,
+    cancelled: 0,
+    other: 0,
+    totalRevenue: 0,
+    paidRevenue: 0,
+  };
+
+  allOrders.forEach(order => {
+    const price = parseFloat(order.total_price || '0');
+    analysis.totalRevenue += price;
+    
+    switch (order.financial_status) {
+      case 'paid':
+        analysis.paid++;
+        analysis.paidRevenue += price;
+        break;
+      case 'pending':
+        analysis.pending++;
+        break;
+      case 'refunded':
+      case 'partially_refunded':
+        analysis.refunded++;
+        break;
+      case 'voided':
+        analysis.cancelled++;
+        break;
+      default:
+        analysis.other++;
+    }
+  });
+
+  console.log(`[Shopify Sync] Order Analysis:`, analysis);
 
   // Save orders to database
   if (allOrders.length > 0) {
@@ -116,55 +218,76 @@ async function syncOrders(storeId: string, shopDomain: string, accessToken: stri
       closed_at: order.closed_at || null,
     }));
 
+    // Clear existing orders for this store first (to avoid orphans)
+    console.log(`[Shopify Sync] Clearing existing orders for store...`);
+    await supabase
+      .from('shopify_orders')
+      .delete()
+      .eq('store_id', storeId);
+
     // Insert in batches of 100
+    let insertedCount = 0;
     for (let i = 0; i < ordersToInsert.length; i += 100) {
       const batch = ordersToInsert.slice(i, i + 100);
       const { error } = await supabase
         .from('shopify_orders')
-        .upsert(batch, { 
-          onConflict: 'store_id,shopify_order_id',
-          ignoreDuplicates: false 
-        });
+        .insert(batch);
       
       if (error) {
-        console.error(`[Shopify Sync] Error inserting orders batch ${i/100 + 1}:`, error.message);
+        console.error(`[Shopify Sync] Error inserting batch ${Math.floor(i/100) + 1}:`, error.message);
+      } else {
+        insertedCount += batch.length;
       }
     }
 
-    console.log(`[Shopify Sync] Saved ${ordersToInsert.length} orders to database`);
+    console.log(`[Shopify Sync] Inserted ${insertedCount} orders to database`);
+
+    // Verify what was saved
+    const { data: verifyData, count } = await supabase
+      .from('shopify_orders')
+      .select('total_price, financial_status', { count: 'exact' })
+      .eq('store_id', storeId)
+      .limit(5);
+    
+    console.log(`[Shopify Sync] Verification - Orders in DB: ${count}`);
+    console.log(`[Shopify Sync] Sample saved orders:`, verifyData);
   }
 
-  return allOrders.length;
+  return {
+    count: allOrders.length,
+    revenue: analysis.paidRevenue,
+    paidCount: analysis.paid,
+  };
 }
 
-// Sync all customers
+// ============================================
+// SYNC CUSTOMERS
+// ============================================
 async function syncCustomers(storeId: string, shopDomain: string, accessToken: string): Promise<number> {
-  console.log(`[Shopify Sync] Starting customers sync for ${shopDomain}...`);
+  console.log(`\n[Shopify Sync] ========== STARTING CUSTOMERS SYNC ==========`);
   
   let allCustomers: any[] = [];
-  let sinceId: string | null = null;
+  let nextUrl: string | null = `/customers.json?limit=250`;
   let pageCount = 0;
   const maxPages = 20;
 
-  do {
-    let endpoint = '/customers.json?limit=250';
-    if (sinceId) {
-      endpoint += `&since_id=${sinceId}`;
-    }
-
-    const response = await shopifyFetch(shopDomain, accessToken, endpoint);
-    const customers = response.customers || [];
+  while (nextUrl && pageCount < maxPages) {
+    pageCount++;
+    const { data, nextPageUrl } = await shopifyFetch(shopDomain, accessToken, nextUrl);
+    const customers = data.customers || [];
     
     if (customers.length === 0) break;
     
     allCustomers = [...allCustomers, ...customers];
-    sinceId = customers[customers.length - 1]?.id?.toString();
-    pageCount++;
-  } while (pageCount < maxPages);
+    nextUrl = nextPageUrl;
+    
+    if (nextUrl) {
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+  }
 
   console.log(`[Shopify Sync] Fetched ${allCustomers.length} customers`);
 
-  // Save customers to database
   if (allCustomers.length > 0) {
     const customersToInsert = allCustomers.map((customer: any) => ({
       store_id: storeId,
@@ -183,55 +306,52 @@ async function syncCustomers(storeId: string, shopDomain: string, accessToken: s
       updated_at: customer.updated_at,
     }));
 
-    // Insert in batches
+    // Clear and insert
+    await supabase.from('shopify_customers').delete().eq('store_id', storeId);
+
     for (let i = 0; i < customersToInsert.length; i += 100) {
       const batch = customersToInsert.slice(i, i + 100);
       const { error } = await supabase
         .from('shopify_customers')
-        .upsert(batch, { 
-          onConflict: 'store_id,shopify_customer_id',
-          ignoreDuplicates: false 
-        });
+        .insert(batch);
       
       if (error) {
         console.error(`[Shopify Sync] Error inserting customers batch:`, error.message);
       }
     }
-
-    console.log(`[Shopify Sync] Saved ${customersToInsert.length} customers to database`);
   }
 
   return allCustomers.length;
 }
 
-// Sync all products
+// ============================================
+// SYNC PRODUCTS
+// ============================================
 async function syncProducts(storeId: string, shopDomain: string, accessToken: string): Promise<number> {
-  console.log(`[Shopify Sync] Starting products sync for ${shopDomain}...`);
+  console.log(`\n[Shopify Sync] ========== STARTING PRODUCTS SYNC ==========`);
   
   let allProducts: any[] = [];
-  let sinceId: string | null = null;
+  let nextUrl: string | null = `/products.json?limit=250`;
   let pageCount = 0;
   const maxPages = 20;
 
-  do {
-    let endpoint = '/products.json?limit=250';
-    if (sinceId) {
-      endpoint += `&since_id=${sinceId}`;
-    }
-
-    const response = await shopifyFetch(shopDomain, accessToken, endpoint);
-    const products = response.products || [];
+  while (nextUrl && pageCount < maxPages) {
+    pageCount++;
+    const { data, nextPageUrl } = await shopifyFetch(shopDomain, accessToken, nextUrl);
+    const products = data.products || [];
     
     if (products.length === 0) break;
     
     allProducts = [...allProducts, ...products];
-    sinceId = products[products.length - 1]?.id?.toString();
-    pageCount++;
-  } while (pageCount < maxPages);
+    nextUrl = nextPageUrl;
+    
+    if (nextUrl) {
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+  }
 
   console.log(`[Shopify Sync] Fetched ${allProducts.length} products`);
 
-  // Save products to database
   if (allProducts.length > 0) {
     const productsToInsert = allProducts.map((product: any) => {
       const firstVariant = product.variants?.[0] || {};
@@ -247,7 +367,7 @@ async function syncProducts(storeId: string, shopDomain: string, accessToken: st
         status: product.status || 'active',
         price: parseFloat(firstVariant.price || '0'),
         compare_at_price: firstVariant.compare_at_price ? parseFloat(firstVariant.compare_at_price) : null,
-        cost_per_item: firstVariant.inventory_item?.cost ? parseFloat(firstVariant.inventory_item.cost) : 0,
+        cost_per_item: firstVariant.cost ? parseFloat(firstVariant.cost) : 0,
         sku: firstVariant.sku || null,
         barcode: firstVariant.barcode || null,
         inventory_quantity: firstVariant.inventory_quantity || 0,
@@ -260,43 +380,38 @@ async function syncProducts(storeId: string, shopDomain: string, accessToken: st
       };
     });
 
-    // Insert in batches
+    // Clear and insert
+    await supabase.from('shopify_products').delete().eq('store_id', storeId);
+
     for (let i = 0; i < productsToInsert.length; i += 100) {
       const batch = productsToInsert.slice(i, i + 100);
       const { error } = await supabase
         .from('shopify_products')
-        .upsert(batch, { 
-          onConflict: 'store_id,shopify_product_id',
-          ignoreDuplicates: false 
-        });
+        .insert(batch);
       
       if (error) {
         console.error(`[Shopify Sync] Error inserting products batch:`, error.message);
       }
     }
-
-    console.log(`[Shopify Sync] Saved ${productsToInsert.length} products to database`);
   }
 
   return allProducts.length;
 }
 
-// Get counts from Shopify API
-async function getCounts(shopDomain: string, accessToken: string) {
-  const [ordersCount, customersCount, productsCount] = await Promise.all([
-    shopifyFetch(shopDomain, accessToken, '/orders/count.json?status=any').then(r => r.count).catch(() => 0),
-    shopifyFetch(shopDomain, accessToken, '/customers/count.json').then(r => r.count).catch(() => 0),
-    shopifyFetch(shopDomain, accessToken, '/products/count.json').then(r => r.count).catch(() => 0),
-  ]);
-
-  return { ordersCount, customersCount, productsCount };
-}
-
-// Main sync endpoint
+// ============================================
+// MAIN SYNC ENDPOINT - POST
+// ============================================
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const { storeId, syncType = 'all' } = body;
+
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`[Shopify Sync] SYNC REQUEST STARTED`);
+    console.log(`[Shopify Sync] Type: ${syncType}, StoreId: ${storeId || 'all'}`);
+    console.log(`${'='.repeat(60)}\n`);
 
     // Get store(s) to sync
     let query = supabase
@@ -310,7 +425,10 @@ export async function POST(request: NextRequest) {
 
     const { data: stores, error: storesError } = await query;
 
-    if (storesError) throw storesError;
+    if (storesError) {
+      console.error('[Shopify Sync] Error fetching stores:', storesError);
+      throw storesError;
+    }
     
     if (!stores || stores.length === 0) {
       return NextResponse.json(
@@ -319,29 +437,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log(`[Shopify Sync] Found ${stores.length} store(s) to sync`);
+
     const results = [];
 
     for (const store of stores) {
+      const storeStartTime = Date.now();
+      
       try {
-        console.log(`[Shopify Sync] Starting full sync for ${store.shop_name} (${store.shop_domain})...`);
+        console.log(`\n[Shopify Sync] Processing store: ${store.shop_name} (${store.shop_domain})`);
         
-        let ordersCount = 0;
+        let ordersResult = { count: 0, revenue: 0, paidCount: 0 };
         let customersCount = 0;
         let productsCount = 0;
-        let totalRevenue = 0;
 
         // Sync based on type
         if (syncType === 'all' || syncType === 'orders') {
-          ordersCount = await syncOrders(store.id, store.shop_domain, store.access_token);
-          
-          // Calculate total revenue from synced orders
-          const { data: revenueData } = await supabase
-            .from('shopify_orders')
-            .select('total_price')
-            .eq('store_id', store.id)
-            .in('financial_status', ['paid', 'partially_paid', 'partially_refunded']);
-          
-          totalRevenue = (revenueData || []).reduce((sum, o) => sum + parseFloat(o.total_price || '0'), 0);
+          ordersResult = await syncOrders(store.id, store.shop_domain, store.access_token);
         }
 
         if (syncType === 'all' || syncType === 'customers') {
@@ -353,31 +465,42 @@ export async function POST(request: NextRequest) {
         }
 
         // Update store stats
-        await supabase
+        const { error: updateError } = await supabase
           .from('shopify_stores')
           .update({
-            total_orders: ordersCount,
+            total_orders: ordersResult.count,
             total_customers: customersCount,
             total_products: productsCount,
-            total_revenue: totalRevenue,
+            total_revenue: ordersResult.revenue,
             last_sync_at: new Date().toISOString(),
           })
           .eq('id', store.id);
 
+        if (updateError) {
+          console.error('[Shopify Sync] Error updating store stats:', updateError);
+        }
+
+        const storeTime = ((Date.now() - storeStartTime) / 1000).toFixed(1);
+        
         results.push({
           storeId: store.id,
           storeName: store.shop_name,
           domain: store.shop_domain,
           success: true,
-          orders: ordersCount,
+          orders: ordersResult.count,
+          paidOrders: ordersResult.paidCount,
           customers: customersCount,
           products: productsCount,
-          revenue: totalRevenue,
+          revenue: ordersResult.revenue,
+          timeSeconds: parseFloat(storeTime),
         });
 
-        console.log(`[Shopify Sync] Completed sync for ${store.shop_name}: ${ordersCount} orders, ${customersCount} customers, ${productsCount} products`);
+        console.log(`\n[Shopify Sync] ✅ Completed ${store.shop_name} in ${storeTime}s`);
+        console.log(`[Shopify Sync] Orders: ${ordersResult.count} (${ordersResult.paidCount} paid)`);
+        console.log(`[Shopify Sync] Revenue: R$ ${ordersResult.revenue.toFixed(2)}`);
+        
       } catch (err: any) {
-        console.error(`[Shopify Sync] Error syncing ${store.shop_domain}:`, err.message);
+        console.error(`[Shopify Sync] ❌ Error syncing ${store.shop_domain}:`, err.message);
         results.push({
           storeId: store.id,
           storeName: store.shop_name,
@@ -388,17 +511,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
     const successCount = results.filter(r => r.success).length;
     const totalOrders = results.reduce((sum, r) => sum + (r.orders || 0), 0);
+    const totalRevenue = results.reduce((sum, r) => sum + (r.revenue || 0), 0);
+
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`[Shopify Sync] SYNC COMPLETED`);
+    console.log(`[Shopify Sync] Total time: ${totalTime}s`);
+    console.log(`[Shopify Sync] Stores: ${successCount}/${stores.length} successful`);
+    console.log(`[Shopify Sync] Total orders: ${totalOrders}`);
+    console.log(`[Shopify Sync] Total revenue: R$ ${totalRevenue.toFixed(2)}`);
+    console.log(`${'='.repeat(60)}\n`);
 
     return NextResponse.json({
       success: true,
-      message: `Sincronização concluída para ${successCount}/${stores.length} loja(s)`,
+      message: `Sincronização concluída! ${totalOrders} pedidos importados.`,
       totalOrders,
+      totalRevenue,
+      timeSeconds: parseFloat(totalTime),
       results,
     });
+    
   } catch (error: any) {
-    console.error('[Shopify Sync] Error:', error);
+    console.error('[Shopify Sync] Fatal error:', error);
     return NextResponse.json(
       { error: error.message || 'Erro ao sincronizar' },
       { status: 500 }
@@ -406,15 +542,18 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - Quick sync / status check
+// ============================================
+// GET - Quick status / trigger sync
+// ============================================
 export async function GET(request: NextRequest) {
   const storeId = request.nextUrl.searchParams.get('storeId');
+  const action = request.nextUrl.searchParams.get('action');
   
   try {
     // Get store(s)
     let query = supabase
       .from('shopify_stores')
-      .select('id, shop_domain, access_token, shop_name')
+      .select('id, shop_domain, access_token, shop_name, total_orders, total_revenue, last_sync_at')
       .eq('is_active', true);
     
     if (storeId) {
@@ -432,64 +571,84 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Sync all stores
-    let totalOrders = 0;
-    let totalRevenue = 0;
-    const results = [];
+    // If action=sync, do a full sync
+    if (action === 'sync') {
+      const results = [];
+      
+      for (const store of stores) {
+        try {
+          const ordersResult = await syncOrders(store.id, store.shop_domain, store.access_token);
+          
+          await supabase
+            .from('shopify_stores')
+            .update({
+              total_orders: ordersResult.count,
+              total_revenue: ordersResult.revenue,
+              last_sync_at: new Date().toISOString(),
+            })
+            .eq('id', store.id);
 
-    for (const store of stores) {
-      try {
-        // Sync orders
-        const ordersCount = await syncOrders(store.id, store.shop_domain, store.access_token);
-        
-        // Calculate revenue
-        const { data: revenueData } = await supabase
-          .from('shopify_orders')
-          .select('total_price')
-          .eq('store_id', store.id)
-          .in('financial_status', ['paid', 'partially_paid', 'partially_refunded']);
-        
-        const storeRevenue = (revenueData || []).reduce((sum, o) => sum + parseFloat(o.total_price || '0'), 0);
-
-        // Update store
-        await supabase
-          .from('shopify_stores')
-          .update({
-            total_orders: ordersCount,
-            total_revenue: storeRevenue,
-            last_sync_at: new Date().toISOString(),
-          })
-          .eq('id', store.id);
-
-        totalOrders += ordersCount;
-        totalRevenue += storeRevenue;
-        
-        results.push({
-          store: store.shop_name,
-          orders: ordersCount,
-          revenue: storeRevenue,
-          success: true,
-        });
-      } catch (err: any) {
-        results.push({
-          store: store.shop_name,
-          error: err.message,
-          success: false,
-        });
+          results.push({
+            store: store.shop_name,
+            orders: ordersResult.count,
+            revenue: ordersResult.revenue,
+            success: true,
+          });
+        } catch (err: any) {
+          results.push({
+            store: store.shop_name,
+            error: err.message,
+            success: false,
+          });
+        }
       }
+
+      const totalOrders = results.reduce((sum, r) => sum + (r.orders || 0), 0);
+      const totalRevenue = results.reduce((sum, r) => sum + (r.revenue || 0), 0);
+
+      return NextResponse.json({
+        success: true,
+        message: `Sincronizados ${totalOrders} pedidos`,
+        totalOrders,
+        totalRevenue,
+        results,
+      });
     }
+
+    // Otherwise just return status
+    const storeStats = await Promise.all(stores.map(async (store) => {
+      const { count: dbOrderCount } = await supabase
+        .from('shopify_orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('store_id', store.id);
+
+      const { data: revenueData } = await supabase
+        .from('shopify_orders')
+        .select('total_price')
+        .eq('store_id', store.id)
+        .in('financial_status', ['paid', 'partially_paid']);
+
+      const dbRevenue = (revenueData || []).reduce((sum, o) => sum + parseFloat(o.total_price || '0'), 0);
+
+      return {
+        id: store.id,
+        name: store.shop_name,
+        domain: store.shop_domain,
+        ordersInDb: dbOrderCount || 0,
+        revenueInDb: dbRevenue,
+        lastSync: store.last_sync_at,
+      };
+    }));
 
     return NextResponse.json({
       success: true,
-      message: `Sincronizados ${totalOrders} pedidos de ${stores.length} loja(s)`,
-      totalOrders,
-      totalRevenue,
-      results,
+      stores: storeStats,
     });
+    
   } catch (error: any) {
     console.error('[Shopify Sync] Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Erro ao sincronizar' },
+      { error: error.message || 'Erro' },
       { status: 500 }
     );
   }
