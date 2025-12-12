@@ -264,7 +264,7 @@ export async function GET(request: NextRequest) {
 
     if (action === 'sync') {
       // Full sync
-      await syncKlaviyoData(orgId, klaviyoAccount.api_key);
+      await syncKlaviyoData(orgId!, klaviyoAccount.api_key);
       
       return NextResponse.json({ 
         success: true,
