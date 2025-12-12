@@ -481,19 +481,28 @@ export default function SettingsPage() {
         body: JSON.stringify({ apiKey: apiKeyValue }),
       });
 
-      if (response.ok) {
+      const data = await response.json();
+
+      if (response.ok && data.success) {
         setIntegrations(prev => prev.map(i => 
           i.id === 'klaviyo' 
-            ? { ...i, connected: true, status: 'healthy', lastSync: 'Agora' }
+            ? { 
+                ...i, 
+                connected: true, 
+                status: 'healthy', 
+                lastSync: 'Agora',
+                stats: { Account: data.account?.name || 'Conectado' }
+              }
             : i
         ));
         setShowKlaviyoModal(false);
+        alert('Klaviyo conectado com sucesso!');
       } else {
-        alert('Erro ao conectar Klaviyo. Verifique a API Key.');
+        alert(data.error || 'Erro ao conectar Klaviyo');
       }
     } catch (error) {
       console.error('Klaviyo save error:', error);
-      alert('Erro ao conectar Klaviyo');
+      alert('Erro de conexão. Verifique sua internet e tente novamente.');
     }
   };
 

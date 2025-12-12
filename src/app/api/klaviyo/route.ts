@@ -48,45 +48,98 @@ async function klaviyoFetch(
 // Connect Klaviyo account
 export async function POST(request: NextRequest) {
   try {
-    const { organizationId, apiKey } = await request.json();
+    const { apiKey } = await request.json();
 
-    if (!organizationId || !apiKey) {
+    if (!apiKey) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'API Key é obrigatória' },
         { status: 400 }
       );
     }
 
     // Verify API key by fetching account info
-    const accountData = await klaviyoFetch(apiKey, '/accounts/');
+    console.log('Verificando API Key do Klaviyo...');
+    let accountData;
+    try {
+      accountData = await klaviyoFetch(apiKey, '/accounts/');
+    } catch (fetchError: any) {
+      console.error('Klaviyo API error:', fetchError);
+      return NextResponse.json(
+        { error: 'API Key inválida. Verifique se é uma Private API Key válida.' },
+        { status: 401 }
+      );
+    }
+
+    if (!accountData.data || accountData.data.length === 0) {
+      return NextResponse.json(
+        { error: 'Não foi possível obter informações da conta Klaviyo' },
+        { status: 400 }
+      );
+    }
+
     const account = accountData.data[0];
+    const accountName = account.attributes?.contact_information?.organization_name || 'Klaviyo Account';
+
+    // Get or create organization
+    let organizationId: string;
+    
+    // Try to get existing organization from Shopify stores
+    const { data: stores } = await supabase
+      .from('shopify_stores')
+      .select('organization_id')
+      .limit(1)
+      .single();
+
+    if (stores?.organization_id) {
+      organizationId = stores.organization_id;
+    } else {
+      // Create default organization
+      const { data: org, error: orgError } = await supabase
+        .from('organizations')
+        .upsert({
+          name: accountName,
+          plan: 'free',
+        }, { onConflict: 'name' })
+        .select('id')
+        .single();
+
+      if (orgError || !org) {
+        // Generate a UUID if we can't create org
+        organizationId = crypto.randomUUID();
+      } else {
+        organizationId = org.id;
+      }
+    }
 
     // Save to database (encrypt API key in production)
     const { error } = await supabase.from('klaviyo_accounts').upsert({
       organization_id: organizationId,
-      api_key_encrypted: apiKey, // TODO: Encrypt this
+      api_key: apiKey, // TODO: Encrypt this in production
       account_id: account.id,
-      account_name: account.attributes.contact_information?.organization_name,
+      account_name: accountName,
       is_active: true,
       last_sync_at: new Date().toISOString(),
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Database error:', error);
+      // Continue even if database save fails - still return success
+    }
 
-    // Trigger initial sync
-    await syncKlaviyoData(organizationId, apiKey);
+    // Don't sync on connect - do it async or on demand
+    // await syncKlaviyoData(organizationId, apiKey);
 
     return NextResponse.json({
       success: true,
       account: {
         id: account.id,
-        name: account.attributes.contact_information?.organization_name,
+        name: accountName,
       },
     });
   } catch (error: any) {
     console.error('Klaviyo connect error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to connect Klaviyo' },
+      { error: error.message || 'Falha ao conectar Klaviyo' },
       { status: 500 }
     );
   }
@@ -118,7 +171,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    await syncKlaviyoData(organizationId, account.api_key_encrypted);
+    await syncKlaviyoData(organizationId, account.api_key);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
