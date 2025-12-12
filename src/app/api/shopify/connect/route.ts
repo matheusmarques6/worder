@@ -303,40 +303,118 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Sync store data (orders, products, customers)
+// Sync store data - calls the sync API
 async function syncStoreData(storeId: string, shopDomain: string, accessToken: string) {
   try {
-    // Fetch recent orders
-    const ordersResponse = await fetch(
-      `https://${shopDomain}/admin/api/2024-01/orders.json?status=any&limit=250`,
-      {
+    console.log(`[Shopify Connect] Starting initial sync for store ${storeId}...`);
+    
+    // Fetch orders with pagination
+    let allOrders: any[] = [];
+    let sinceId: string | null = null;
+    let pageCount = 0;
+    const maxPages = 10;
+
+    do {
+      let endpoint = `https://${shopDomain}/admin/api/2024-01/orders.json?status=any&limit=250`;
+      if (sinceId) {
+        endpoint += `&since_id=${sinceId}`;
+      }
+
+      const ordersResponse = await fetch(endpoint, {
         headers: {
           'X-Shopify-Access-Token': accessToken,
           'Content-Type': 'application/json',
         },
+      });
+
+      if (!ordersResponse.ok) break;
+
+      const { orders } = await ordersResponse.json();
+      if (!orders || orders.length === 0) break;
+
+      allOrders = [...allOrders, ...orders];
+      sinceId = orders[orders.length - 1]?.id?.toString();
+      pageCount++;
+    } while (pageCount < maxPages);
+
+    console.log(`[Shopify Connect] Fetched ${allOrders.length} orders`);
+
+    // Save orders to database
+    if (allOrders.length > 0) {
+      const ordersToInsert = allOrders.map((order: any) => ({
+        store_id: storeId,
+        shopify_order_id: order.id.toString(),
+        order_number: order.order_number,
+        name: order.name,
+        email: order.email || order.contact_email || null,
+        phone: order.phone || null,
+        total_price: parseFloat(order.total_price || '0'),
+        subtotal_price: parseFloat(order.subtotal_price || '0'),
+        total_tax: parseFloat(order.total_tax || '0'),
+        total_discounts: parseFloat(order.total_discounts || '0'),
+        currency: order.currency || 'BRL',
+        financial_status: order.financial_status || 'pending',
+        fulfillment_status: order.fulfillment_status || null,
+        customer_id: order.customer?.id?.toString() || null,
+        customer_email: order.customer?.email || null,
+        customer_first_name: order.customer?.first_name || null,
+        customer_last_name: order.customer?.last_name || null,
+        line_items: order.line_items || [],
+        shipping_address: order.shipping_address || null,
+        billing_address: order.billing_address || null,
+        processed_at: order.processed_at || order.created_at,
+        created_at: order.created_at,
+        updated_at: order.updated_at,
+      }));
+
+      // Insert in batches of 100
+      for (let i = 0; i < ordersToInsert.length; i += 100) {
+        const batch = ordersToInsert.slice(i, i + 100);
+        const { error } = await supabase
+          .from('shopify_orders')
+          .upsert(batch, { 
+            onConflict: 'store_id,shopify_order_id',
+            ignoreDuplicates: false 
+          });
+        
+        if (error) {
+          console.error(`[Shopify Connect] Error inserting orders batch:`, error.message);
+        }
       }
+
+      console.log(`[Shopify Connect] Saved ${ordersToInsert.length} orders to database`);
+    }
+
+    // Calculate totals
+    const totalOrders = allOrders.length;
+    const totalRevenue = allOrders.reduce((sum: number, order: any) => 
+      sum + parseFloat(order.total_price || '0'), 0
     );
 
-    if (ordersResponse.ok) {
-      const { orders } = await ordersResponse.json();
-      
-      // Calculate totals
-      const totalOrders = orders.length;
-      const totalRevenue = orders.reduce((sum: number, order: any) => 
-        sum + parseFloat(order.total_price || '0'), 0
-      );
+    // Get counts from API
+    const [customersRes, productsRes] = await Promise.all([
+      fetch(`https://${shopDomain}/admin/api/2024-01/customers/count.json`, {
+        headers: { 'X-Shopify-Access-Token': accessToken },
+      }).then(r => r.json()).catch(() => ({ count: 0 })),
+      fetch(`https://${shopDomain}/admin/api/2024-01/products/count.json`, {
+        headers: { 'X-Shopify-Access-Token': accessToken },
+      }).then(r => r.json()).catch(() => ({ count: 0 })),
+    ]);
 
-      // Update store stats
-      await supabase
-        .from('shopify_stores')
-        .update({
-          total_orders: totalOrders,
-          total_revenue: totalRevenue,
-          last_sync_at: new Date().toISOString(),
-        })
-        .eq('id', storeId);
-    }
+    // Update store stats
+    await supabase
+      .from('shopify_stores')
+      .update({
+        total_orders: totalOrders,
+        total_revenue: totalRevenue,
+        total_customers: customersRes.count || 0,
+        total_products: productsRes.count || 0,
+        last_sync_at: new Date().toISOString(),
+      })
+      .eq('id', storeId);
+
+    console.log(`[Shopify Connect] Sync complete: ${totalOrders} orders, R$ ${totalRevenue.toFixed(2)}`);
   } catch (error) {
-    console.error('Sync store data error:', error);
+    console.error('[Shopify Connect] Sync error:', error);
   }
 }

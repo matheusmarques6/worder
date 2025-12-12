@@ -512,6 +512,54 @@ export default function DashboardPage() {
         />
       ) : (
         <>
+          {/* Sync Needed Alert */}
+          {hasStoreConnected && metrics && metrics.pedidos === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-500/20 rounded-lg">
+                  <RefreshCw className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-blue-400">Sincronização necessária</p>
+                  <p className="text-sm text-dark-400">Clique para importar os pedidos do Shopify</p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  setIsRefreshing(true)
+                  try {
+                    const response = await fetch('/api/shopify/sync', { method: 'POST', body: JSON.stringify({}) })
+                    const data = await response.json()
+                    if (data.success) {
+                      alert(`Sincronização concluída!\n${data.totalOrders || 0} pedidos importados.`)
+                      fetchDashboardData()
+                    } else {
+                      alert(data.error || 'Erro ao sincronizar')
+                    }
+                  } catch (error) {
+                    console.error('Sync error:', error)
+                    alert('Erro ao sincronizar. Verifique o console.')
+                  } finally {
+                    setIsRefreshing(false)
+                  }
+                }}
+                disabled={isRefreshing}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {isRefreshing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                Sincronizar Agora
+              </button>
+            </motion.div>
+          )}
+
           {/* Missing Integrations Alerts */}
           {!integrations.klaviyo && (
             <IntegrationAlert 

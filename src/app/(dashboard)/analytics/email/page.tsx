@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
   Mail,
@@ -25,600 +25,575 @@ import {
   XCircle,
   Clock,
   Zap,
-  ShoppingCart,
-  Heart,
-  Gift,
+  AlertCircle,
+  Loader2,
+  Link as LinkIcon,
 } from 'lucide-react'
 
-// Mock data for Klaviyo metrics
-const kpiData = [
-  {
-    title: 'Taxa de Abertura',
-    value: '24.8%',
-    change: '+2.3%',
-    trend: 'up',
-    icon: Eye,
-    color: 'from-blue-500 to-blue-600',
-    description: 'vs. período anterior',
-  },
-  {
-    title: 'Taxa de Clique',
-    value: '3.2%',
-    change: '+0.5%',
-    trend: 'up',
-    icon: MousePointer,
-    color: 'from-green-500 to-green-600',
-    description: 'vs. período anterior',
-  },
-  {
-    title: 'Taxa de Conversão',
-    value: '1.8%',
-    change: '-0.2%',
-    trend: 'down',
-    icon: Target,
-    color: 'from-purple-500 to-purple-600',
-    description: 'vs. período anterior',
-  },
-  {
-    title: 'Receita Gerada',
-    value: 'R$ 45.890',
-    change: '+12.5%',
-    trend: 'up',
-    icon: DollarSign,
-    color: 'from-primary-500 to-accent-500',
-    description: 'vs. período anterior',
-  },
-  {
-    title: 'ROI de Email',
-    value: '4.2x',
-    change: '+0.8x',
-    trend: 'up',
-    icon: TrendingUp,
-    color: 'from-yellow-500 to-orange-500',
-    description: 'retorno sobre investimento',
-  },
-  {
-    title: 'Lista Ativa',
-    value: '12.450',
-    change: '+890',
-    trend: 'up',
-    icon: Users,
-    color: 'from-cyan-500 to-blue-500',
-    description: 'contatos ativos',
-  },
-  {
-    title: 'Novos Inscritos',
-    value: '234',
-    change: '+45',
-    trend: 'up',
-    icon: UserPlus,
-    color: 'from-emerald-500 to-green-600',
-    description: 'este período',
-  },
-  {
-    title: 'Unsubscribes',
-    value: '18',
-    change: '-5',
-    trend: 'up',
-    icon: UserMinus,
-    color: 'from-red-500 to-rose-600',
-    description: 'este período',
-  },
-]
+// Types
+interface KPI {
+  value: string | number
+  change: number
+}
 
-// Funnel data
-const funnelData = [
-  { stage: 'Enviados', value: 25000, percent: 100, color: 'bg-blue-500' },
-  { stage: 'Entregues', value: 24500, percent: 98, color: 'bg-cyan-500' },
-  { stage: 'Abertos', value: 6200, percent: 24.8, color: 'bg-green-500' },
-  { stage: 'Clicados', value: 800, percent: 3.2, color: 'bg-yellow-500' },
-  { stage: 'Convertidos', value: 450, percent: 1.8, color: 'bg-primary-500' },
-]
-
-// Campaign data
-const campaigns = [
-  {
-    id: 1,
-    name: 'Black Friday - Early Access',
-    status: 'sent',
-    type: 'campaign',
-    sent: 12500,
-    delivered: 12250,
-    opened: 4200,
-    clicked: 890,
-    converted: 156,
-    revenue: 'R$ 12.340',
-    openRate: '34.3%',
-    clickRate: '7.3%',
-    date: '2024-11-22',
-  },
-  {
-    id: 2,
-    name: 'Welcome Series - Email 1',
-    status: 'active',
-    type: 'flow',
-    sent: 3200,
-    delivered: 3150,
-    opened: 1890,
-    clicked: 567,
-    converted: 89,
-    revenue: 'R$ 5.670',
-    openRate: '60%',
-    clickRate: '18%',
-    date: 'Automático',
-  },
-  {
-    id: 3,
-    name: 'Carrinho Abandonado',
-    status: 'active',
-    type: 'flow',
-    sent: 1850,
-    delivered: 1820,
-    opened: 982,
-    clicked: 456,
-    converted: 234,
-    revenue: 'R$ 18.920',
-    openRate: '54%',
-    clickRate: '25%',
-    date: 'Automático',
-  },
-  {
-    id: 4,
-    name: 'Newsletter Semanal',
-    status: 'sent',
-    type: 'campaign',
-    sent: 8900,
-    delivered: 8720,
-    opened: 1920,
-    clicked: 234,
-    converted: 45,
-    revenue: 'R$ 3.450',
-    openRate: '22%',
-    clickRate: '2.7%',
-    date: '2024-11-20',
-  },
-  {
-    id: 5,
-    name: 'Pós-Compra - Review',
-    status: 'active',
-    type: 'flow',
-    sent: 2100,
-    delivered: 2080,
-    opened: 1456,
-    clicked: 234,
-    converted: 89,
-    revenue: 'R$ 2.340',
-    openRate: '70%',
-    clickRate: '11%',
-    date: 'Automático',
-  },
-]
-
-// Flow performance data
-const flows = [
-  {
-    name: 'Welcome Series',
-    icon: Heart,
-    emails: 3,
-    subscribers: 890,
-    revenue: 'R$ 8.450',
-    openRate: '58%',
-    conversionRate: '4.2%',
-    color: 'from-pink-500 to-rose-500',
-  },
-  {
-    name: 'Carrinho Abandonado',
-    icon: ShoppingCart,
-    emails: 3,
-    subscribers: 456,
-    revenue: 'R$ 18.920',
-    openRate: '54%',
-    conversionRate: '12.8%',
-    color: 'from-orange-500 to-amber-500',
-  },
-  {
-    name: 'Browse Abandonment',
-    icon: Eye,
-    emails: 2,
-    subscribers: 234,
-    revenue: 'R$ 4.560',
-    openRate: '42%',
-    conversionRate: '3.1%',
-    color: 'from-blue-500 to-cyan-500',
-  },
-  {
-    name: 'Pós-Compra',
-    icon: Gift,
-    emails: 4,
-    subscribers: 678,
-    revenue: 'R$ 6.780',
-    openRate: '68%',
-    conversionRate: '8.5%',
-    color: 'from-green-500 to-emerald-500',
-  },
-  {
-    name: 'Win-back',
-    icon: Zap,
-    emails: 3,
-    subscribers: 123,
-    revenue: 'R$ 2.340',
-    openRate: '32%',
-    conversionRate: '2.4%',
-    color: 'from-purple-500 to-violet-500',
-  },
-]
-
-// Heatmap data
-const heatmapData = [
-  { day: 'Seg', hours: [12, 18, 25, 32, 45, 52, 48, 42, 38, 35, 28, 22, 18, 25, 32, 45, 52, 48, 42, 38, 35, 28, 22, 15] },
-  { day: 'Ter', hours: [15, 22, 28, 35, 48, 55, 52, 45, 40, 38, 32, 25, 20, 28, 35, 48, 55, 52, 45, 40, 38, 32, 25, 18] },
-  { day: 'Qua', hours: [14, 20, 26, 34, 46, 54, 50, 44, 39, 36, 30, 24, 19, 26, 34, 46, 54, 50, 44, 39, 36, 30, 24, 16] },
-  { day: 'Qui', hours: [16, 24, 30, 38, 50, 58, 54, 48, 42, 40, 34, 28, 22, 30, 38, 50, 58, 54, 48, 42, 40, 34, 28, 20] },
-  { day: 'Sex', hours: [18, 26, 32, 40, 52, 60, 56, 50, 44, 42, 36, 30, 24, 32, 40, 52, 60, 56, 50, 44, 42, 36, 30, 22] },
-  { day: 'Sáb', hours: [10, 14, 18, 24, 32, 38, 35, 30, 26, 24, 20, 16, 12, 18, 24, 32, 38, 35, 30, 26, 24, 20, 16, 10] },
-  { day: 'Dom', hours: [8, 12, 15, 20, 28, 34, 32, 28, 24, 22, 18, 14, 10, 15, 20, 28, 34, 32, 28, 24, 22, 18, 14, 8] },
-]
-
-// Segments data
-const segments = [
-  { name: 'Clientes VIP', size: 1250, engagement: 'Alto', lastUpdated: '2h atrás', growth: '+12%' },
-  { name: 'Compradores Recentes', size: 3400, engagement: 'Alto', lastUpdated: '1h atrás', growth: '+8%' },
-  { name: 'Engajados 30 dias', size: 5600, engagement: 'Médio', lastUpdated: '3h atrás', growth: '+5%' },
-  { name: 'Inativos 60 dias', size: 2100, engagement: 'Baixo', lastUpdated: '1d atrás', growth: '-3%' },
-  { name: 'Novos Inscritos', size: 890, engagement: 'Alto', lastUpdated: '30min atrás', growth: '+25%' },
-]
-
-export default function EmailMarketingPage() {
-  const [dateRange, setDateRange] = useState('7d')
-  const [selectedTab, setSelectedTab] = useState<'campaigns' | 'flows' | 'segments'>('campaigns')
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'sent':
-        return <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-500/20 text-green-400">Enviada</span>
-      case 'active':
-        return <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-500/20 text-blue-400">Ativa</span>
-      case 'draft':
-        return <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-500/20 text-gray-400">Rascunho</span>
-      case 'scheduled':
-        return <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-500/20 text-yellow-400">Agendada</span>
-      default:
-        return null
-    }
+interface EmailData {
+  connected: boolean
+  account?: {
+    id: string
+    name: string
+    lastSync: string
   }
+  kpis?: {
+    openRate: KPI
+    clickRate: KPI
+    conversionRate: KPI
+    revenue: KPI
+    roi: KPI
+    subscribers: KPI
+    bounceRate: KPI
+    unsubscribeRate: KPI
+  }
+  totals?: {
+    sent: number
+    delivered: number
+    opened: number
+    clicked: number
+    bounced: number
+    unsubscribed: number
+    revenue: number
+    conversions: number
+  }
+  funnel?: Array<{
+    stage: string
+    value: number
+    percent: number
+  }>
+  campaigns?: Array<{
+    id: string
+    name: string
+    status: string
+    type: string
+    sent: number
+    delivered: number
+    opened: number
+    clicked: number
+    converted: number
+    revenue: number
+    openRate: string
+    clickRate: string
+    sentAt: string
+  }>
+  flows?: Array<{
+    id: string
+    name: string
+    status: string
+    triggered: number
+    opened: number
+    clicked: number
+    revenue: number
+    openRate: string
+    clickRate: string
+  }>
+  lists?: Array<{
+    id: string
+    name: string
+    profileCount: number
+  }>
+}
 
-  const getTypeBadge = (type: string) => {
-    switch (type) {
-      case 'campaign':
-        return <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-500/20 text-purple-400">Campanha</span>
-      case 'flow':
-        return <span className="px-2 py-1 text-xs font-medium rounded-full bg-cyan-500/20 text-cyan-400">Flow</span>
-      default:
-        return null
-    }
+// Date range options
+const dateRanges = [
+  { id: 'today', label: 'Hoje' },
+  { id: '7d', label: '7 Dias' },
+  { id: '30d', label: '30 Dias' },
+  { id: '90d', label: '90 Dias' },
+]
+
+// Format helpers
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+  }).format(value)
+}
+
+const formatNumber = (value: number) => {
+  return new Intl.NumberFormat('pt-BR').format(value)
+}
+
+// Empty State Component
+const EmptyState = ({ 
+  title, 
+  description, 
+  actionLabel, 
+  onAction,
+}: {
+  title: string
+  description: string
+  actionLabel?: string
+  onAction?: () => void
+}) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    className="flex flex-col items-center justify-center py-16 px-8 bg-dark-800/40 rounded-2xl border border-dark-700/30 border-dashed"
+  >
+    <div className="w-16 h-16 rounded-2xl bg-dark-700/50 flex items-center justify-center mb-4">
+      <Mail className="w-8 h-8 text-dark-400" />
+    </div>
+    <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
+    <p className="text-dark-400 text-center max-w-md mb-6">{description}</p>
+    {actionLabel && onAction && (
+      <button
+        onClick={onAction}
+        className="flex items-center gap-2 px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-xl font-medium transition-colors"
+      >
+        <LinkIcon className="w-4 h-4" />
+        {actionLabel}
+      </button>
+    )}
+  </motion.div>
+)
+
+// KPI Card Component
+const KPICard = ({
+  title,
+  value,
+  change,
+  icon: Icon,
+  color,
+  loading = false,
+}: {
+  title: string
+  value: string
+  change?: number
+  icon: React.ElementType
+  color: string
+  loading?: boolean
+}) => {
+  const isPositive = (change || 0) >= 0
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-dark-800/50 rounded-xl p-4 border border-dark-700/50"
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className={`p-2 rounded-lg bg-gradient-to-br ${color}`}>
+          <Icon className="w-4 h-4 text-white" />
+        </div>
+        {change !== undefined && (
+          <div className={`flex items-center gap-1 text-xs ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+            {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+            {Math.abs(change).toFixed(1)}%
+          </div>
+        )}
+      </div>
+      <div className="text-2xl font-bold text-white mb-1">
+        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : value}
+      </div>
+      <div className="text-xs text-dark-400">{title}</div>
+    </motion.div>
+  )
+}
+
+// Campaign Row Component
+const CampaignRow = ({ campaign }: { campaign: EmailData['campaigns'][0] }) => {
+  const statusColors: Record<string, string> = {
+    sent: 'bg-green-500/20 text-green-400',
+    scheduled: 'bg-blue-500/20 text-blue-400',
+    draft: 'bg-dark-600 text-dark-400',
+    cancelled: 'bg-red-500/20 text-red-400',
   }
 
   return (
-    <div className="space-y-6">
+    <tr className="border-b border-dark-700/50 hover:bg-dark-700/20 transition-colors">
+      <td className="py-3 px-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-dark-700/50 rounded-lg">
+            <Send className="w-4 h-4 text-primary-400" />
+          </div>
+          <div>
+            <div className="font-medium text-white text-sm">{campaign.name}</div>
+            <div className="text-xs text-dark-400">
+              {campaign.sentAt ? new Date(campaign.sentAt).toLocaleDateString('pt-BR') : '-'}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td className="py-3 px-4">
+        <span className={`px-2 py-1 rounded-full text-xs ${statusColors[campaign.status] || 'bg-dark-600 text-dark-400'}`}>
+          {campaign.status === 'sent' ? 'Enviado' : campaign.status}
+        </span>
+      </td>
+      <td className="py-3 px-4 text-sm text-dark-300">{formatNumber(campaign.sent)}</td>
+      <td className="py-3 px-4 text-sm text-dark-300">{formatNumber(campaign.opened)}</td>
+      <td className="py-3 px-4 text-sm text-dark-300">{formatNumber(campaign.clicked)}</td>
+      <td className="py-3 px-4">
+        <span className="text-sm text-green-400">{campaign.openRate}%</span>
+      </td>
+      <td className="py-3 px-4">
+        <span className="text-sm text-blue-400">{campaign.clickRate}%</span>
+      </td>
+      <td className="py-3 px-4 text-sm text-primary-400 font-medium">
+        {formatCurrency(campaign.revenue)}
+      </td>
+    </tr>
+  )
+}
+
+// Flow Row Component  
+const FlowRow = ({ flow }: { flow: EmailData['flows'][0] }) => {
+  return (
+    <tr className="border-b border-dark-700/50 hover:bg-dark-700/20 transition-colors">
+      <td className="py-3 px-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-purple-500/20 rounded-lg">
+            <Zap className="w-4 h-4 text-purple-400" />
+          </div>
+          <div>
+            <div className="font-medium text-white text-sm">{flow.name}</div>
+            <div className="text-xs text-dark-400">Automação</div>
+          </div>
+        </div>
+      </td>
+      <td className="py-3 px-4">
+        <span className={`px-2 py-1 rounded-full text-xs ${
+          flow.status === 'live' ? 'bg-green-500/20 text-green-400' : 'bg-dark-600 text-dark-400'
+        }`}>
+          {flow.status === 'live' ? 'Ativo' : flow.status}
+        </span>
+      </td>
+      <td className="py-3 px-4 text-sm text-dark-300">{formatNumber(flow.triggered)}</td>
+      <td className="py-3 px-4 text-sm text-dark-300">{formatNumber(flow.opened)}</td>
+      <td className="py-3 px-4 text-sm text-dark-300">{formatNumber(flow.clicked)}</td>
+      <td className="py-3 px-4">
+        <span className="text-sm text-green-400">{flow.openRate}%</span>
+      </td>
+      <td className="py-3 px-4">
+        <span className="text-sm text-blue-400">{flow.clickRate}%</span>
+      </td>
+      <td className="py-3 px-4 text-sm text-primary-400 font-medium">
+        {formatCurrency(flow.revenue)}
+      </td>
+    </tr>
+  )
+}
+
+export default function EmailAnalyticsPage() {
+  const [selectedPeriod, setSelectedPeriod] = useState('30d')
+  const [activeTab, setActiveTab] = useState<'campaigns' | 'flows'>('campaigns')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [data, setData] = useState<EmailData | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  // Fetch data from API
+  const fetchData = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      const response = await fetch(`/api/analytics/email?period=${selectedPeriod}`)
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to fetch data')
+      }
+
+      setData(result)
+    } catch (err: any) {
+      console.error('Email analytics error:', err)
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+      setIsRefreshing(false)
+    }
+  }, [selectedPeriod])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    // Trigger Klaviyo sync first
+    try {
+      await fetch('/api/klaviyo?action=sync')
+    } catch {}
+    await fetchData()
+  }
+
+  // Not connected state
+  if (!isLoading && data && !data.connected) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-white mb-2">Analytics de Email</h1>
+          <p className="text-dark-400">Métricas detalhadas das suas campanhas de email marketing</p>
+        </div>
+        
+        <EmptyState
+          title="Klaviyo não conectado"
+          description="Conecte sua conta do Klaviyo para ver as métricas de email marketing em tempo real."
+          actionLabel="Conectar Klaviyo"
+          onAction={() => window.location.href = '/settings?tab=integrations'}
+        />
+      </div>
+    )
+  }
+
+  // Loading state
+  if (isLoading && !data) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+        </div>
+      </div>
+    )
+  }
+
+  const kpis = data?.kpis
+  const funnel = data?.funnel || []
+  const campaigns = data?.campaigns || []
+  const flows = data?.flows || []
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">E-mail Marketing</h1>
-          <p className="text-dark-400 mt-1">Performance completa do Klaviyo</p>
+          <h1 className="text-2xl font-bold text-white mb-1">Analytics de Email</h1>
+          <p className="text-dark-400 text-sm">
+            {data?.account?.name} • Última atualização: {
+              data?.account?.lastSync 
+                ? new Date(data.account.lastSync).toLocaleString('pt-BR')
+                : '-'
+            }
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center bg-dark-800/50 rounded-xl p-1">
-            {['Hoje', 'Ontem', '7 Dias', '30 Dias', 'Este Mês'].map((range, idx) => (
+        <div className="flex items-center gap-3">
+          {/* Period selector */}
+          <div className="flex items-center gap-1 bg-dark-800/50 p-1 rounded-xl">
+            {dateRanges.map((range) => (
               <button
-                key={range}
-                onClick={() => setDateRange(['today', 'yesterday', '7d', '30d', 'month'][idx])}
+                key={range.id}
+                onClick={() => setSelectedPeriod(range.id)}
                 className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
-                  dateRange === ['today', 'yesterday', '7d', '30d', 'month'][idx]
-                    ? 'bg-primary-500 text-white'
+                  selectedPeriod === range.id
+                    ? 'bg-dark-700 text-white'
                     : 'text-dark-400 hover:text-white'
                 }`}
               >
-                {range}
+                {range.label}
               </button>
             ))}
           </div>
 
-          <button className="flex items-center gap-2 px-4 py-2 bg-dark-800/50 hover:bg-dark-700/50 rounded-xl text-dark-300 hover:text-white transition-all">
-            <Filter className="w-4 h-4" />
-            Filtrar
-          </button>
-
-          <button className="flex items-center gap-2 px-4 py-2 bg-dark-800/50 hover:bg-dark-700/50 rounded-xl text-dark-300 hover:text-white transition-all">
-            <Download className="w-4 h-4" />
-            Exportar
-          </button>
-
-          <button className="flex items-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 rounded-xl text-white transition-all">
-            <RefreshCw className="w-4 h-4" />
-            Atualizar
+          {/* Refresh button */}
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="p-2 bg-dark-800/50 hover:bg-dark-700/50 border border-dark-700/50 rounded-xl text-dark-300 hover:text-white transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {kpiData.map((kpi, index) => (
-          <motion.div
-            key={kpi.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 }}
-            className="relative overflow-hidden bg-dark-800/50 backdrop-blur-sm border border-dark-700/50 rounded-2xl p-4 hover:border-dark-600/50 transition-all group"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-dark-400">{kpi.title}</p>
-                <p className="text-2xl font-bold text-white mt-1">{kpi.value}</p>
-                <div className="flex items-center gap-1 mt-2">
-                  {kpi.trend === 'up' ? (
-                    <ArrowUpRight className="w-4 h-4 text-green-400" />
-                  ) : (
-                    <ArrowDownRight className="w-4 h-4 text-red-400" />
-                  )}
-                  <span className={`text-sm font-medium ${kpi.trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
-                    {kpi.change}
-                  </span>
-                  <span className="text-xs text-dark-500 ml-1">{kpi.description}</span>
-                </div>
-              </div>
-              <div className={`p-2 rounded-xl bg-gradient-to-br ${kpi.color} opacity-80`}>
-                <kpi.icon className="w-5 h-5 text-white" />
-              </div>
-            </div>
-          </motion.div>
-        ))}
+        <KPICard
+          title="Taxa de Abertura"
+          value={`${kpis?.openRate?.value || 0}%`}
+          change={kpis?.openRate?.change}
+          icon={Eye}
+          color="from-blue-500 to-blue-600"
+          loading={isLoading}
+        />
+        <KPICard
+          title="Taxa de Clique"
+          value={`${kpis?.clickRate?.value || 0}%`}
+          change={kpis?.clickRate?.change}
+          icon={MousePointer}
+          color="from-green-500 to-green-600"
+          loading={isLoading}
+        />
+        <KPICard
+          title="Taxa de Conversão"
+          value={`${kpis?.conversionRate?.value || 0}%`}
+          change={kpis?.conversionRate?.change}
+          icon={Target}
+          color="from-purple-500 to-purple-600"
+          loading={isLoading}
+        />
+        <KPICard
+          title="Receita Gerada"
+          value={formatCurrency(Number(kpis?.revenue?.value) || 0)}
+          change={kpis?.revenue?.change}
+          icon={DollarSign}
+          color="from-primary-500 to-accent-500"
+          loading={isLoading}
+        />
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Funnel Chart */}
-        <div className="lg:col-span-2 bg-dark-800/50 backdrop-blur-sm border border-dark-700/50 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-lg font-semibold text-white">Funil de Conversão</h3>
-              <p className="text-sm text-dark-400">Jornada do email até a conversão</p>
-            </div>
-          </div>
+      {/* Second row of KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KPICard
+          title="ROI de Email"
+          value={`${kpis?.roi?.value || 0}x`}
+          icon={TrendingUp}
+          color="from-yellow-500 to-orange-500"
+          loading={isLoading}
+        />
+        <KPICard
+          title="Lista Ativa"
+          value={formatNumber(Number(kpis?.subscribers?.value) || 0)}
+          icon={Users}
+          color="from-cyan-500 to-blue-500"
+          loading={isLoading}
+        />
+        <KPICard
+          title="Taxa de Bounce"
+          value={`${kpis?.bounceRate?.value || 0}%`}
+          icon={XCircle}
+          color="from-red-500 to-rose-600"
+          loading={isLoading}
+        />
+        <KPICard
+          title="Unsubscribes"
+          value={`${kpis?.unsubscribeRate?.value || 0}%`}
+          icon={UserMinus}
+          color="from-gray-500 to-gray-600"
+          loading={isLoading}
+        />
+      </div>
 
-          <div className="space-y-4">
-            {funnelData.map((item, index) => (
-              <div key={item.stage} className="relative">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-white">{item.stage}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-dark-400">{item.value.toLocaleString()}</span>
-                    <span className="text-sm font-medium text-white">{item.percent}%</span>
-                  </div>
-                </div>
-                <div className="h-8 bg-dark-700/50 rounded-lg overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${item.percent}%` }}
-                    transition={{ delay: index * 0.1, duration: 0.5 }}
-                    className={`h-full ${item.color} rounded-lg`}
+      {/* Funnel */}
+      {funnel.length > 0 && (
+        <div className="bg-dark-800/50 rounded-xl p-6 border border-dark-700/50">
+          <h2 className="text-lg font-semibold text-white mb-4">Funil de Email</h2>
+          <div className="space-y-3">
+            {funnel.map((stage, index) => (
+              <div key={stage.stage} className="flex items-center gap-4">
+                <div className="w-24 text-sm text-dark-400">{stage.stage}</div>
+                <div className="flex-1 h-8 bg-dark-700/50 rounded-lg overflow-hidden">
+                  <div
+                    className={`h-full rounded-lg transition-all ${
+                      index === 0 ? 'bg-blue-500' :
+                      index === 1 ? 'bg-cyan-500' :
+                      index === 2 ? 'bg-green-500' :
+                      index === 3 ? 'bg-yellow-500' :
+                      'bg-primary-500'
+                    }`}
+                    style={{ width: `${stage.percent}%` }}
                   />
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Flow Performance */}
-        <div className="bg-dark-800/50 backdrop-blur-sm border border-dark-700/50 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-lg font-semibold text-white">Performance dos Flows</h3>
-              <p className="text-sm text-dark-400">Automações ativas</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {flows.map((flow) => (
-              <div key={flow.name} className="p-3 bg-dark-700/30 rounded-xl hover:bg-dark-700/50 transition-all cursor-pointer">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg bg-gradient-to-br ${flow.color}`}>
-                    <flow.icon className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{flow.name}</p>
-                    <p className="text-xs text-dark-400">{flow.emails} emails • {flow.subscribers} ativos</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-green-400">{flow.revenue}</p>
-                    <p className="text-xs text-dark-400">{flow.conversionRate} conv.</p>
-                  </div>
+                <div className="w-20 text-right">
+                  <span className="text-sm font-medium text-white">{formatNumber(stage.value)}</span>
+                  <span className="text-xs text-dark-400 ml-1">({stage.percent.toFixed(1)}%)</span>
                 </div>
               </div>
             ))}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Best Time Heatmap */}
-      <div className="bg-dark-800/50 backdrop-blur-sm border border-dark-700/50 rounded-2xl p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-lg font-semibold text-white">Melhor Horário para Envio</h3>
-            <p className="text-sm text-dark-400">Taxa de abertura por dia e hora</p>
-          </div>
+      {/* Campaigns & Flows Table */}
+      <div className="bg-dark-800/50 rounded-xl border border-dark-700/50 overflow-hidden">
+        {/* Tabs */}
+        <div className="flex items-center gap-4 p-4 border-b border-dark-700/50">
+          <button
+            onClick={() => setActiveTab('campaigns')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'campaigns'
+                ? 'bg-primary-500/20 text-primary-400'
+                : 'text-dark-400 hover:text-white'
+            }`}
+          >
+            Campanhas ({campaigns.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('flows')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === 'flows'
+                ? 'bg-purple-500/20 text-purple-400'
+                : 'text-dark-400 hover:text-white'
+            }`}
+          >
+            Automações ({flows.length})
+          </button>
         </div>
 
+        {/* Table */}
         <div className="overflow-x-auto">
-          <div className="min-w-[800px]">
-            <div className="flex mb-2">
-              <div className="w-12" />
-              {Array.from({ length: 24 }, (_, i) => (
-                <div key={i} className="flex-1 text-center text-xs text-dark-500">{i}h</div>
-              ))}
-            </div>
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-dark-700/50 text-left">
+                <th className="py-3 px-4 text-xs font-medium text-dark-400 uppercase">
+                  {activeTab === 'campaigns' ? 'Campanha' : 'Automação'}
+                </th>
+                <th className="py-3 px-4 text-xs font-medium text-dark-400 uppercase">Status</th>
+                <th className="py-3 px-4 text-xs font-medium text-dark-400 uppercase">
+                  {activeTab === 'campaigns' ? 'Enviados' : 'Disparados'}
+                </th>
+                <th className="py-3 px-4 text-xs font-medium text-dark-400 uppercase">Abertos</th>
+                <th className="py-3 px-4 text-xs font-medium text-dark-400 uppercase">Clicados</th>
+                <th className="py-3 px-4 text-xs font-medium text-dark-400 uppercase">Taxa Abertura</th>
+                <th className="py-3 px-4 text-xs font-medium text-dark-400 uppercase">Taxa Clique</th>
+                <th className="py-3 px-4 text-xs font-medium text-dark-400 uppercase">Receita</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeTab === 'campaigns' ? (
+                campaigns.length > 0 ? (
+                  campaigns.map((campaign) => (
+                    <CampaignRow key={campaign.id} campaign={campaign} />
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-dark-400">
+                      Nenhuma campanha encontrada no período selecionado
+                    </td>
+                  </tr>
+                )
+              ) : (
+                flows.length > 0 ? (
+                  flows.map((flow) => (
+                    <FlowRow key={flow.id} flow={flow} />
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-dark-400">
+                      Nenhuma automação ativa encontrada
+                    </td>
+                  </tr>
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-            {heatmapData.map((row) => (
-              <div key={row.day} className="flex items-center mb-1">
-                <div className="w-12 text-sm text-dark-400">{row.day}</div>
-                <div className="flex-1 flex gap-0.5">
-                  {row.hours.map((value, idx) => (
-                    <div
-                      key={idx}
-                      className="flex-1 h-6 rounded-sm transition-all hover:scale-110"
-                      style={{ backgroundColor: `rgba(255, 107, 53, ${value / 100})` }}
-                      title={`${row.day} ${idx}h: ${value}% abertura`}
-                    />
-                  ))}
-                </div>
+      {/* Lists */}
+      {data?.lists && data.lists.length > 0 && (
+        <div className="bg-dark-800/50 rounded-xl p-6 border border-dark-700/50">
+          <h2 className="text-lg font-semibold text-white mb-4">Listas</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {data.lists.map((list) => (
+              <div key={list.id} className="bg-dark-700/30 rounded-lg p-4">
+                <div className="text-sm font-medium text-white mb-1">{list.name}</div>
+                <div className="text-2xl font-bold text-primary-400">{formatNumber(list.profileCount)}</div>
+                <div className="text-xs text-dark-400">contatos</div>
               </div>
             ))}
-
-            <div className="flex items-center justify-end mt-4 gap-2">
-              <span className="text-xs text-dark-500">Baixo</span>
-              <div className="flex gap-0.5">
-                {[0.1, 0.3, 0.5, 0.7, 0.9].map((opacity) => (
-                  <div key={opacity} className="w-4 h-4 rounded-sm" style={{ backgroundColor: `rgba(255, 107, 53, ${opacity})` }} />
-                ))}
-              </div>
-              <span className="text-xs text-dark-500">Alto</span>
-            </div>
           </div>
         </div>
-      </div>
-
-      {/* Tabs Section */}
-      <div className="bg-dark-800/50 backdrop-blur-sm border border-dark-700/50 rounded-2xl">
-        <div className="flex border-b border-dark-700/50">
-          {[
-            { id: 'campaigns', label: 'Campanhas', count: campaigns.length },
-            { id: 'flows', label: 'Flows', count: flows.length },
-            { id: 'segments', label: 'Segmentos', count: segments.length },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setSelectedTab(tab.id as typeof selectedTab)}
-              className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-all border-b-2 ${
-                selectedTab === tab.id ? 'text-white border-primary-500' : 'text-dark-400 border-transparent hover:text-white'
-              }`}
-            >
-              {tab.label}
-              <span className="px-2 py-0.5 text-xs rounded-full bg-dark-700">{tab.count}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="p-6">
-          {selectedTab === 'campaigns' && (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-left text-sm text-dark-400 border-b border-dark-700/50">
-                    <th className="pb-4 font-medium">Campanha</th>
-                    <th className="pb-4 font-medium">Status</th>
-                    <th className="pb-4 font-medium">Tipo</th>
-                    <th className="pb-4 font-medium text-right">Enviados</th>
-                    <th className="pb-4 font-medium text-right">Abertos</th>
-                    <th className="pb-4 font-medium text-right">Taxa Abertura</th>
-                    <th className="pb-4 font-medium text-right">Receita</th>
-                    <th className="pb-4 font-medium text-right">Data</th>
-                    <th className="pb-4 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {campaigns.map((campaign) => (
-                    <tr key={campaign.id} className="border-b border-dark-700/30 hover:bg-dark-700/20 transition-colors">
-                      <td className="py-4"><p className="font-medium text-white">{campaign.name}</p></td>
-                      <td className="py-4">{getStatusBadge(campaign.status)}</td>
-                      <td className="py-4">{getTypeBadge(campaign.type)}</td>
-                      <td className="py-4 text-right text-dark-300">{campaign.sent.toLocaleString()}</td>
-                      <td className="py-4 text-right text-dark-300">{campaign.opened.toLocaleString()}</td>
-                      <td className="py-4 text-right"><span className="text-green-400 font-medium">{campaign.openRate}</span></td>
-                      <td className="py-4 text-right"><span className="text-white font-semibold">{campaign.revenue}</span></td>
-                      <td className="py-4 text-right text-dark-400 text-sm">{campaign.date}</td>
-                      <td className="py-4 text-right">
-                        <button className="p-2 hover:bg-dark-700/50 rounded-lg transition-colors">
-                          <MoreHorizontal className="w-4 h-4 text-dark-400" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {selectedTab === 'flows' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {flows.map((flow) => (
-                <div key={flow.name} className="p-4 bg-dark-700/30 rounded-xl hover:bg-dark-700/50 transition-all cursor-pointer">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className={`p-3 rounded-xl bg-gradient-to-br ${flow.color}`}>
-                      <flow.icon className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-white">{flow.name}</p>
-                      <p className="text-sm text-dark-400">{flow.emails} emails na sequência</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs text-dark-500">Receita</p>
-                      <p className="text-lg font-semibold text-green-400">{flow.revenue}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-dark-500">Taxa de Abertura</p>
-                      <p className="text-lg font-semibold text-white">{flow.openRate}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-dark-500">Conversão</p>
-                      <p className="text-lg font-semibold text-white">{flow.conversionRate}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-dark-500">Ativos</p>
-                      <p className="text-lg font-semibold text-white">{flow.subscribers}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {selectedTab === 'segments' && (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-left text-sm text-dark-400 border-b border-dark-700/50">
-                    <th className="pb-4 font-medium">Segmento</th>
-                    <th className="pb-4 font-medium text-right">Tamanho</th>
-                    <th className="pb-4 font-medium text-center">Engajamento</th>
-                    <th className="pb-4 font-medium text-right">Crescimento</th>
-                    <th className="pb-4 font-medium text-right">Atualizado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {segments.map((segment) => (
-                    <tr key={segment.name} className="border-b border-dark-700/30 hover:bg-dark-700/20 transition-colors">
-                      <td className="py-4"><p className="font-medium text-white">{segment.name}</p></td>
-                      <td className="py-4 text-right text-dark-300">{segment.size.toLocaleString()}</td>
-                      <td className="py-4 text-center">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          segment.engagement === 'Alto' ? 'bg-green-500/20 text-green-400' :
-                          segment.engagement === 'Médio' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'
-                        }`}>{segment.engagement}</span>
-                      </td>
-                      <td className="py-4 text-right">
-                        <span className={`font-medium ${segment.growth.startsWith('+') ? 'text-green-400' : 'text-red-400'}`}>{segment.growth}</span>
-                      </td>
-                      <td className="py-4 text-right text-dark-400 text-sm">{segment.lastUpdated}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   )
 }
