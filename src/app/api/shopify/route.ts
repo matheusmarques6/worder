@@ -115,8 +115,21 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Handle Shopify webhooks
+// Handle Shopify webhooks and connect action
 export async function POST(request: NextRequest) {
+  const contentType = request.headers.get('content-type');
+  
+  // Check if this is a JSON request (from our app) vs webhook
+  if (contentType?.includes('application/json')) {
+    const jsonBody = await request.json();
+    
+    // Handle connect action from onboarding
+    if (jsonBody.action === 'connect') {
+      return handleConnectShopify(request, jsonBody);
+    }
+  }
+
+  // Otherwise, handle as webhook
   const body = await request.text();
   const signature = request.headers.get('X-Shopify-Hmac-Sha256');
   const topic = request.headers.get('X-Shopify-Topic');
@@ -162,6 +175,107 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Webhook processing error:', error);
     return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
+  }
+}
+
+// Handle connecting a Shopify store from onboarding
+async function handleConnectShopify(
+  request: NextRequest,
+  { storeName, storeDomain, accessToken }: { storeName: string; storeDomain: string; accessToken: string }
+) {
+  try {
+    // Get user's organization from cookie/session
+    const authToken = request.cookies.get('sb-access-token')?.value;
+    
+    if (!authToken) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    // Get user and their organization
+    let organizationId: string;
+    
+    if (authToken === 'dev-access-token') {
+      // Dev mode - use a placeholder org ID
+      organizationId = 'dev-org-id';
+    } else {
+      const { data: { user }, error: userError } = await supabase.auth.getUser(authToken);
+      
+      if (userError || !user) {
+        return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile?.organization_id) {
+        return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+      }
+
+      organizationId = profile.organization_id;
+    }
+
+    // Verify the access token by making a test API call to Shopify
+    const shopResponse = await fetch(`https://${storeDomain}/admin/api/2024-01/shop.json`, {
+      headers: { 
+        'X-Shopify-Access-Token': accessToken,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!shopResponse.ok) {
+      const errorText = await shopResponse.text();
+      console.error('Shopify API error:', errorText);
+      return NextResponse.json({ 
+        error: 'Credenciais inválidas. Verifique o domínio e o Access Token.' 
+      }, { status: 400 });
+    }
+
+    const { shop: shopData } = await shopResponse.json();
+
+    // Save to database
+    const { error: dbError } = await supabase.from('shopify_stores').upsert({
+      organization_id: organizationId,
+      shop_domain: storeDomain,
+      shop_name: storeName || shopData.name,
+      shop_email: shopData.email,
+      access_token: accessToken,
+      currency: shopData.currency,
+      timezone: shopData.timezone,
+      is_active: true,
+      last_sync_at: new Date().toISOString(),
+    }, {
+      onConflict: 'organization_id,shop_domain'
+    });
+
+    if (dbError) {
+      console.error('Database error:', dbError);
+      return NextResponse.json({ error: 'Erro ao salvar loja' }, { status: 500 });
+    }
+
+    // Update organization to mark as has_shopify
+    await supabase
+      .from('organizations')
+      .update({ settings: { has_shopify: true } })
+      .eq('id', organizationId);
+
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Loja conectada com sucesso!',
+      shop: {
+        name: storeName || shopData.name,
+        domain: storeDomain,
+        email: shopData.email,
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Connect Shopify error:', error);
+    return NextResponse.json({ 
+      error: error.message || 'Erro ao conectar loja' 
+    }, { status: 500 });
   }
 }
 

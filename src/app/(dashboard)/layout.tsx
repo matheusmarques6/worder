@@ -26,13 +26,8 @@ import {
   X,
   DollarSign,
   TrendingUp,
-  Store,
-  ChevronDown,
-  Check,
-  Plus,
+  Store
 } from 'lucide-react'
-import { useStoreStore, type ShopifyStore } from '@/stores'
-import { AddStoreModal } from '@/components/store/AddStoreModal'
 
 // Worder Logo Component
 const WorderLogo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
@@ -81,32 +76,7 @@ export default function DashboardLayout({
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifications, setNotifications] = useState(3)
-  const [storeDropdownOpen, setStoreDropdownOpen] = useState(false)
-  const [addStoreModalOpen, setAddStoreModalOpen] = useState(false)
   const pathname = usePathname()
-  
-  const { stores, currentStore, setCurrentStore, addStore } = useStoreStore()
-
-  // Get store initials
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2)
-  }
-
-  const handleAddStore = (store: { name: string; domain: string; accessToken: string }) => {
-    const newStore: ShopifyStore = {
-      id: `store-${Date.now()}`,
-      name: store.name,
-      domain: store.domain,
-      isActive: true,
-    }
-    addStore(newStore)
-    setAddStoreModalOpen(false)
-  }
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -220,120 +190,31 @@ export default function DashboardLayout({
         </div>
       </div>
 
-      {/* Store Selector Section */}
-      <div className="p-3 border-t border-dark-800/50 relative">
-        {/* Store Dropdown */}
-        <AnimatePresence>
-          {storeDropdownOpen && !collapsed && (
-            <motion.div
-              initial={{ opacity: 0, y: 8, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.96 }}
-              transition={{ duration: 0.15 }}
-              className="absolute bottom-full left-3 right-3 mb-2 bg-dark-800 border border-dark-700 rounded-xl shadow-xl overflow-hidden z-50"
-            >
-              {/* Stores List */}
-              {stores.length > 0 && (
-                <div className="p-2 border-b border-dark-700">
-                  <p className="px-2 py-1 text-xs font-medium text-dark-500 uppercase tracking-wider">
-                    Suas Lojas
-                  </p>
-                  <div className="space-y-1 mt-1 max-h-48 overflow-y-auto">
-                    {stores.map((store) => (
-                      <button
-                        key={store.id}
-                        onClick={() => {
-                          setCurrentStore(store)
-                          setStoreDropdownOpen(false)
-                        }}
-                        className={`
-                          w-full flex items-center gap-3 p-2 rounded-lg transition-colors
-                          ${currentStore?.id === store.id
-                            ? 'bg-primary-500/10 text-primary-400'
-                            : 'hover:bg-dark-700/50 text-white'
-                          }
-                        `}
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-dark-700 flex items-center justify-center text-xs font-bold">
-                          {getInitials(store.name)}
-                        </div>
-                        <div className="flex-1 text-left min-w-0">
-                          <p className="text-sm font-medium truncate">{store.name}</p>
-                          <p className="text-xs text-dark-400 truncate">{store.domain}</p>
-                        </div>
-                        {currentStore?.id === store.id && (
-                          <Check className="w-4 h-4 text-primary-400 flex-shrink-0" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Add Store Button */}
-              <div className="p-2">
-                <button
-                  onClick={() => {
-                    setAddStoreModalOpen(true)
-                    setStoreDropdownOpen(false)
-                  }}
-                  className="w-full flex items-center gap-3 p-2 rounded-lg text-primary-400 hover:bg-primary-500/10 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-primary-500/20 flex items-center justify-center">
-                    <Plus className="w-4 h-4" />
-                  </div>
-                  <span className="text-sm font-medium">Adicionar Nova Loja</span>
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Store Selector Button */}
-        <button
-          onClick={() => {
-            if (collapsed) {
-              setAddStoreModalOpen(true)
-            } else {
-              setStoreDropdownOpen(!storeDropdownOpen)
-            }
-          }}
-          className={`
-            w-full flex items-center gap-3 p-2 rounded-xl transition-all
-            bg-dark-800/30 hover:bg-dark-800/50
-            ${storeDropdownOpen ? 'ring-1 ring-primary-500/50' : ''}
-            ${collapsed ? 'justify-center' : ''}
-          `}
-        >
-          {/* Store Avatar */}
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
-            {currentStore ? getInitials(currentStore.name) : <Store className="w-4 h-4" />}
+      {/* User section */}
+      <div className="p-3 border-t border-dark-800/50">
+        <div className={`flex items-center gap-3 p-2 rounded-xl bg-dark-800/30 ${collapsed ? 'justify-center' : ''}`}>
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center flex-shrink-0">
+            <span className="text-white font-semibold text-sm">JD</span>
           </div>
-
           <AnimatePresence mode="wait">
             {!collapsed && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex-1 min-w-0 text-left"
+                className="flex-1 min-w-0"
               >
-                <p className="text-sm font-medium text-white truncate">
-                  {currentStore?.name || 'Selecionar Loja'}
-                </p>
-                <p className="text-xs text-dark-400 truncate">
-                  {currentStore?.domain || 'Nenhuma loja conectada'}
-                </p>
+                <p className="text-sm font-medium text-white truncate">João Demo</p>
+                <p className="text-xs text-dark-400 truncate">joao@convertfy.com</p>
               </motion.div>
             )}
           </AnimatePresence>
-
           {!collapsed && (
-            <ChevronDown
-              className={`w-4 h-4 text-dark-400 transition-transform flex-shrink-0 ${storeDropdownOpen ? 'rotate-180' : ''}`}
-            />
+            <button className="p-1.5 rounded-lg hover:bg-dark-700/50 text-dark-400 hover:text-white transition-colors">
+              <LogOut className="w-4 h-4" />
+            </button>
           )}
-        </button>
+        </div>
       </div>
 
       {/* Collapse button - Desktop only */}
@@ -471,13 +352,6 @@ export default function DashboardLayout({
           {children}
         </div>
       </motion.main>
-
-      {/* Add Store Modal */}
-      <AddStoreModal
-        isOpen={addStoreModalOpen}
-        onClose={() => setAddStoreModalOpen(false)}
-        onSuccess={handleAddStore}
-      />
     </div>
   )
 }

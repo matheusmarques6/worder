@@ -8,6 +8,9 @@ const publicRoutes = ['/', '/signup', '/api/auth', '/api/shopify', '/api/klaviyo
 // Routes that should redirect to dashboard if already authenticated
 const authRoutes = ['/', '/signup'];
 
+// Routes that require auth but shouldn't redirect (like onboarding)
+const protectedNoRedirect = ['/onboarding'];
+
 // Check if we're in dev mode
 const isDevMode = process.env.NODE_ENV === 'development' || process.env.DEV_AUTH_BYPASS === 'true';
 

@@ -1,13 +1,12 @@
 'use client'
 
 import * as React from 'react'
-import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import { useUIStore, useStoreStore } from '@/stores'
+import { useUIStore } from '@/stores'
 import {
   LayoutDashboard,
   Users,
@@ -23,13 +22,8 @@ import {
   HelpCircle,
   LogOut,
   Bell,
-  ChevronDown,
-  Check,
-  Plus,
-  ShoppingBag,
 } from 'lucide-react'
 import { Avatar, Tooltip } from '@/components/ui'
-import { AddStoreModal } from '@/components/store/AddStoreModal'
 
 interface NavItem {
   title: string
@@ -47,44 +41,19 @@ const mainNavItems: NavItem[] = [
 
 const analyticsNavItems: NavItem[] = [
   { title: 'E-mail Marketing', href: '/analytics/email', icon: Mail },
-  { title: 'E-commerce', href: '/analytics/ecommerce', icon: ShoppingBag },
   { title: 'Relatórios', href: '/analytics/reports', icon: BarChart3 },
+  { title: 'Flows', href: '/analytics/flows', icon: Workflow },
 ]
 
 const settingsNavItems: NavItem[] = [
+  { title: 'Integrações', href: '/settings/integrations', icon: Store },
   { title: 'Configurações', href: '/settings', icon: Settings },
   { title: 'Ajuda', href: '/help', icon: HelpCircle },
 ]
 
 export function Sidebar() {
   const pathname = usePathname()
-  const router = useRouter()
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
-  const { stores, currentStore, setCurrentStore, addStore } = useStoreStore()
-  
-  const [storeDropdownOpen, setStoreDropdownOpen] = useState(false)
-  const [addStoreModalOpen, setAddStoreModalOpen] = useState(false)
-
-  // Get store initials for avatar
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2)
-  }
-
-  const handleAddStore = (store: { name: string; domain: string; accessToken: string }) => {
-    const newStore = {
-      id: `store-${Date.now()}`,
-      name: store.name,
-      domain: store.domain,
-      isActive: true,
-    }
-    addStore(newStore)
-    setAddStoreModalOpen(false)
-  }
 
   const NavLink = ({ item }: { item: NavItem }) => {
     const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
@@ -136,226 +105,132 @@ export function Sidebar() {
   }
 
   return (
-    <>
-      <motion.aside
-        initial={false}
-        animate={{ width: sidebarCollapsed ? 80 : 280 }}
-        transition={{ duration: 0.3, ease: 'easeInOut' }}
-        className="fixed left-0 top-0 bottom-0 z-40 bg-dark-900/80 backdrop-blur-xl border-r border-dark-700/50 flex flex-col"
-      >
-        {/* Logo */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-dark-700/50">
-          <Link href="/dashboard" className="flex flex-col gap-0.5">
-            <Image
-              src="/logo.png"
-              alt="Worder"
-              width={sidebarCollapsed ? 40 : 110}
-              height={sidebarCollapsed ? 8 : 21}
-              className="object-contain"
-              priority
-            />
-            <AnimatePresence>
-              {!sidebarCollapsed && (
-                <motion.span
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="text-[10px] text-dark-500"
-                >
-                  by Convertfy
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </Link>
-          <button
-            onClick={toggleSidebar}
-            className="w-8 h-8 rounded-lg bg-dark-800 hover:bg-dark-700 flex items-center justify-center text-dark-400 hover:text-dark-100 transition-colors"
-          >
-            {sidebarCollapsed ? (
-              <ChevronRight className="w-4 h-4" />
-            ) : (
-              <ChevronLeft className="w-4 h-4" />
+    <motion.aside
+      initial={false}
+      animate={{ width: sidebarCollapsed ? 80 : 280 }}
+      transition={{ duration: 0.3, ease: 'easeInOut' }}
+      className="fixed left-0 top-0 bottom-0 z-40 bg-dark-900/80 backdrop-blur-xl border-r border-dark-700/50 flex flex-col"
+    >
+      {/* Logo */}
+      <div className="h-16 flex items-center justify-between px-4 border-b border-dark-700/50">
+        <Link href="/dashboard" className="flex flex-col gap-0.5">
+          <Image
+            src="/logo.png"
+            alt="Worder"
+            width={sidebarCollapsed ? 40 : 110}
+            height={sidebarCollapsed ? 8 : 21}
+            className="object-contain"
+            priority
+          />
+          <AnimatePresence>
+            {!sidebarCollapsed && (
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-[10px] text-dark-500"
+              >
+                by Convertfy
+              </motion.span>
             )}
-          </button>
+          </AnimatePresence>
+        </Link>
+        <button
+          onClick={toggleSidebar}
+          className="w-8 h-8 rounded-lg bg-dark-800 hover:bg-dark-700 flex items-center justify-center text-dark-400 hover:text-dark-100 transition-colors"
+        >
+          {sidebarCollapsed ? (
+            <ChevronRight className="w-4 h-4" />
+          ) : (
+            <ChevronLeft className="w-4 h-4" />
+          )}
+        </button>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
+        {/* Main */}
+        <div>
+          {!sidebarCollapsed && (
+            <p className="px-4 mb-2 text-xs font-semibold text-dark-500 uppercase tracking-wider">
+              Principal
+            </p>
+          )}
+          <div className="space-y-1">
+            {mainNavItems.map((item) => (
+              <NavLink key={item.href} item={item} />
+            ))}
+          </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
-          {/* Main */}
-          <div>
-            {!sidebarCollapsed && (
-              <p className="px-4 mb-2 text-xs font-semibold text-dark-500 uppercase tracking-wider">
-                Principal
-              </p>
-            )}
-            <div className="space-y-1">
-              {mainNavItems.map((item) => (
-                <NavLink key={item.href} item={item} />
-              ))}
-            </div>
+        {/* Analytics */}
+        <div>
+          {!sidebarCollapsed && (
+            <p className="px-4 mb-2 text-xs font-semibold text-dark-500 uppercase tracking-wider">
+              Analytics
+            </p>
+          )}
+          <div className="space-y-1">
+            {analyticsNavItems.map((item) => (
+              <NavLink key={item.href} item={item} />
+            ))}
           </div>
+        </div>
 
-          {/* Analytics */}
-          <div>
-            {!sidebarCollapsed && (
-              <p className="px-4 mb-2 text-xs font-semibold text-dark-500 uppercase tracking-wider">
-                Analytics
-              </p>
-            )}
-            <div className="space-y-1">
-              {analyticsNavItems.map((item) => (
-                <NavLink key={item.href} item={item} />
-              ))}
-            </div>
+        {/* Settings */}
+        <div>
+          {!sidebarCollapsed && (
+            <p className="px-4 mb-2 text-xs font-semibold text-dark-500 uppercase tracking-wider">
+              Sistema
+            </p>
+          )}
+          <div className="space-y-1">
+            {settingsNavItems.map((item) => (
+              <NavLink key={item.href} item={item} />
+            ))}
           </div>
+        </div>
+      </nav>
 
-          {/* Settings */}
-          <div>
-            {!sidebarCollapsed && (
-              <p className="px-4 mb-2 text-xs font-semibold text-dark-500 uppercase tracking-wider">
-                Sistema
-              </p>
-            )}
-            <div className="space-y-1">
-              {settingsNavItems.map((item) => (
-                <NavLink key={item.href} item={item} />
-              ))}
-            </div>
-          </div>
-        </nav>
-
-        {/* Store Selector Section */}
-        <div className="p-3 border-t border-dark-700/50 relative">
-          {/* Store Dropdown */}
+      {/* User Section */}
+      <div className="p-3 border-t border-dark-700/50">
+        <div
+          className={cn(
+            'flex items-center gap-3 p-3 rounded-xl bg-dark-800/50 hover:bg-dark-800 transition-colors cursor-pointer',
+            sidebarCollapsed && 'justify-center'
+          )}
+        >
+          <Avatar
+            fallback="JD"
+            size="sm"
+            status="online"
+          />
           <AnimatePresence>
-            {storeDropdownOpen && !sidebarCollapsed && (
+            {!sidebarCollapsed && (
               <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                transition={{ duration: 0.15 }}
-                className="absolute bottom-full left-3 right-3 mb-2 bg-dark-800 border border-dark-700 rounded-xl shadow-xl overflow-hidden z-50"
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: 'auto' }}
+                exit={{ opacity: 0, width: 0 }}
+                className="flex-1 overflow-hidden"
               >
-                {/* Stores List */}
-                {stores.length > 0 && (
-                  <div className="p-2 border-b border-dark-700">
-                    <p className="px-2 py-1 text-xs font-medium text-dark-500 uppercase tracking-wider">
-                      Suas Lojas
-                    </p>
-                    <div className="space-y-1 mt-1 max-h-48 overflow-y-auto">
-                      {stores.map((store) => (
-                        <button
-                          key={store.id}
-                          onClick={() => {
-                            setCurrentStore(store)
-                            setStoreDropdownOpen(false)
-                          }}
-                          className={cn(
-                            'w-full flex items-center gap-3 p-2 rounded-lg transition-colors',
-                            currentStore?.id === store.id
-                              ? 'bg-primary-500/10 text-primary-400'
-                              : 'hover:bg-dark-700/50 text-white'
-                          )}
-                        >
-                          <div className="w-8 h-8 rounded-lg bg-dark-700 flex items-center justify-center text-xs font-bold">
-                            {getInitials(store.name)}
-                          </div>
-                          <div className="flex-1 text-left min-w-0">
-                            <p className="text-sm font-medium truncate">{store.name}</p>
-                            <p className="text-xs text-dark-400 truncate">{store.domain}</p>
-                          </div>
-                          {currentStore?.id === store.id && (
-                            <Check className="w-4 h-4 text-primary-400 flex-shrink-0" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Add Store Button */}
-                <div className="p-2">
-                  <button
-                    onClick={() => {
-                      setAddStoreModalOpen(true)
-                      setStoreDropdownOpen(false)
-                    }}
-                    className="w-full flex items-center gap-3 p-2 rounded-lg text-primary-400 hover:bg-primary-500/10 transition-colors"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-primary-500/20 flex items-center justify-center">
-                      <Plus className="w-4 h-4" />
-                    </div>
-                    <span className="text-sm font-medium">Adicionar Nova Loja</span>
-                  </button>
-                </div>
+                <p className="text-sm font-medium text-dark-100 truncate">João Silva</p>
+                <p className="text-xs text-dark-500 truncate">joao@convertfy.com</p>
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* Store Selector Button */}
-          <button
-            onClick={() => {
-              if (sidebarCollapsed) {
-                setAddStoreModalOpen(true)
-              } else {
-                setStoreDropdownOpen(!storeDropdownOpen)
-              }
-            }}
-            className={cn(
-              'w-full flex items-center gap-3 p-3 rounded-xl transition-all',
-              'bg-dark-800/50 border border-dark-700/50 hover:border-dark-600',
-              storeDropdownOpen && 'border-primary-500/50 bg-dark-800',
-              sidebarCollapsed && 'justify-center'
-            )}
-          >
-            {/* Store Avatar */}
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-              {currentStore ? getInitials(currentStore.name) : <Store className="w-5 h-5" />}
-            </div>
-
-            <AnimatePresence>
-              {!sidebarCollapsed && (
-                <motion.div
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: 'auto' }}
-                  exit={{ opacity: 0, width: 0 }}
-                  className="flex-1 text-left min-w-0 overflow-hidden"
-                >
-                  <p className="text-sm font-semibold text-white truncate">
-                    {currentStore?.name || 'Selecionar Loja'}
-                  </p>
-                  <p className="text-xs text-dark-400 truncate">
-                    {currentStore?.domain || 'Nenhuma loja conectada'}
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {!sidebarCollapsed && (
-              <ChevronDown
-                className={cn(
-                  'w-4 h-4 text-dark-400 transition-transform flex-shrink-0',
-                  storeDropdownOpen && 'rotate-180'
-                )}
-              />
-            )}
-          </button>
+          {!sidebarCollapsed && (
+            <button className="p-1.5 rounded-lg hover:bg-dark-700 text-dark-400 hover:text-dark-100 transition-colors">
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
         </div>
-      </motion.aside>
-
-      {/* Add Store Modal */}
-      <AddStoreModal
-        isOpen={addStoreModalOpen}
-        onClose={() => setAddStoreModalOpen(false)}
-        onSuccess={handleAddStore}
-      />
-    </>
+      </div>
+    </motion.aside>
   )
 }
 
 export function Header() {
   const { sidebarCollapsed } = useUIStore()
-  const { currentStore } = useStoreStore()
 
   return (
     <header
@@ -369,7 +244,7 @@ export function Header() {
         <div className="relative">
           <input
             type="text"
-            placeholder="Buscar em tudo..."
+            placeholder="Buscar clientes, pedidos, conversas..."
             className="w-full bg-dark-800/50 border border-dark-700 rounded-xl px-4 py-2.5 pl-10 text-sm text-dark-100 placeholder:text-dark-500 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
           />
           <svg
@@ -399,18 +274,11 @@ export function Header() {
           <span className="absolute top-1 right-1 w-2 h-2 bg-primary-500 rounded-full" />
         </button>
 
-        {/* User Avatar */}
-        <div className="flex items-center gap-3 pl-4 border-l border-dark-700">
-          <div className="text-right">
-            <p className="text-sm font-medium text-white">João Demo</p>
-            <p className="text-xs text-dark-400">Admin</p>
-          </div>
-          <Avatar
-            fallback="JD"
-            size="sm"
-            status="online"
-          />
-        </div>
+        {/* Quick Actions */}
+        <button className="btn-primary text-sm">
+          <Zap className="w-4 h-4" />
+          Nova Automação
+        </button>
       </div>
     </header>
   )

@@ -99,9 +99,9 @@ export default function SignupPage() {
       // Show success message
       setSuccess(true);
       
-      // Redirect to dashboard immediately
+      // Redirect to onboarding
       setTimeout(() => {
-        router.push('/dashboard');
+        router.push('/onboarding');
         router.refresh();
       }, 1500);
     } catch (err: any) {
@@ -131,7 +131,7 @@ export default function SignupPage() {
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Conta criada com sucesso!</h2>
           <p className="text-dark-400 mb-6">
-            Redirecionando para o dashboard...
+            Configurando sua conta...
           </p>
           <Link
             href="/"

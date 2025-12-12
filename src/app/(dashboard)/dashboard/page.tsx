@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   TrendingUp,
@@ -29,19 +29,8 @@ import {
   TrendingUp as Growth,
   Store,
   Facebook,
-  Activity,
-  ChevronDown
+  Activity
 } from 'lucide-react'
-import {
-  AdsPlatformCard,
-  AdsTrendChart,
-  SpendDistributionChart,
-  TopAdsList,
-  AdsSummaryCards,
-  FacebookIcon,
-  GoogleIcon,
-  TiktokIcon,
-} from '@/components/ads'
 import {
   AreaChart,
   Area,
@@ -89,37 +78,6 @@ const topCampaigns = [
   { id: 3, name: 'Welcome Series', sent: 38000, opens: 15200, clicks: 3800, revenue: 67000, conversion: 2.8 },
   { id: 4, name: 'Newsletter #48', sent: 42000, opens: 16800, clicks: 3200, revenue: 45000, conversion: 1.9 },
   { id: 5, name: 'Pós-Compra Upsell', sent: 8500, opens: 5100, clicks: 1800, revenue: 52000, conversion: 6.2 },
-]
-
-// Mock data for Ads Performance
-const adsMetrics = {
-  meta: { spend: 42300, revenue: 186400, roas: 4.41, cpa: 28.50, change: 12.5 },
-  google: { spend: 31200, revenue: 142800, roas: 4.58, cpa: 22.10, change: -8.2 },
-  tiktok: { spend: 18500, revenue: 67200, roas: 3.63, cpa: 35.20, change: 45.3 },
-}
-
-const adsTrendData = [
-  { label: '16/11', meta: 4100, google: 3800, tiktok: 1900 },
-  { label: '17/11', meta: 4500, google: 3900, tiktok: 2100 },
-  { label: '18/11', meta: 3900, google: 3700, tiktok: 1800 },
-  { label: '19/11', meta: 5200, google: 4200, tiktok: 2300 },
-  { label: '20/11', meta: 5800, google: 4400, tiktok: 2500 },
-  { label: '21/11', meta: 5500, google: 4300, tiktok: 2400 },
-  { label: '22/11', meta: 6200, google: 4600, tiktok: 2700 },
-]
-
-const spendDistribution = [
-  { name: 'Facebook Ads', value: 42300, color: '#1877F2' },
-  { name: 'Google Ads', value: 31200, color: '#EA4335' },
-  { name: 'TikTok Ads', value: 18500, color: '#18181B' },
-]
-
-const topAds = [
-  { id: '1', name: 'Retargeting - Carrinho Abandonado', platform: 'meta' as const, spend: 12450, revenue: 89200, roas: 7.16 },
-  { id: '2', name: 'Shopping - Bestsellers', platform: 'google' as const, spend: 8900, revenue: 52300, roas: 5.87 },
-  { id: '3', name: 'UGC - Produto Viral', platform: 'tiktok' as const, spend: 5200, revenue: 28400, roas: 5.46 },
-  { id: '4', name: 'Lookalike - Compradores', platform: 'meta' as const, spend: 15800, revenue: 67200, roas: 4.25 },
-  { id: '5', name: 'Search - Marca', platform: 'google' as const, spend: 3200, revenue: 41500, roas: 12.96 },
 ]
 
 const formatCurrency = (value: number) => {
@@ -516,68 +474,6 @@ export default function DashboardPage() {
           </table>
         </div>
       </motion.div>
-
-      {/* ADS PERFORMANCE SECTION */}
-      <div className="space-y-6">
-        {/* Section Header */}
-        <div className="flex items-center gap-3">
-          <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs font-bold rounded">NOVO</span>
-          <h2 className="text-xl font-bold text-white">Performance de Ads</h2>
-          <div className="flex items-center gap-2 ml-2">
-            <span className="px-2 py-1 bg-blue-600 text-white text-xs rounded flex items-center gap-1">
-              <FacebookIcon className="w-3 h-3" /> Facebook
-            </span>
-            <span className="px-2 py-1 bg-red-500 text-white text-xs rounded flex items-center gap-1">
-              <GoogleIcon className="w-3 h-3" /> Google
-            </span>
-            <span className="px-2 py-1 bg-dark-700 text-white text-xs rounded flex items-center gap-1">
-              <TiktokIcon className="w-3 h-3" /> TikTok
-            </span>
-          </div>
-        </div>
-
-        {/* Ads Platform Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <AdsPlatformCard
-            platform="meta"
-            spend={adsMetrics.meta.spend}
-            spendChange={adsMetrics.meta.change}
-            revenue={adsMetrics.meta.revenue}
-            roas={adsMetrics.meta.roas}
-            cpa={adsMetrics.meta.cpa}
-            isConnected={true}
-          />
-          <AdsPlatformCard
-            platform="google"
-            spend={adsMetrics.google.spend}
-            spendChange={adsMetrics.google.change}
-            revenue={adsMetrics.google.revenue}
-            roas={adsMetrics.google.roas}
-            cpa={adsMetrics.google.cpa}
-            isConnected={true}
-          />
-          <AdsPlatformCard
-            platform="tiktok"
-            spend={adsMetrics.tiktok.spend}
-            spendChange={adsMetrics.tiktok.change}
-            revenue={adsMetrics.tiktok.revenue}
-            roas={adsMetrics.tiktok.roas}
-            cpa={adsMetrics.tiktok.cpa}
-            isConnected={true}
-          />
-        </div>
-
-        {/* Ads Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Trend Chart */}
-          <div className="lg:col-span-2">
-            <AdsTrendChart data={adsTrendData} />
-          </div>
-          
-          {/* Top Ads */}
-          <TopAdsList ads={topAds} />
-        </div>
-      </div>
 
       {/* Marketing Metrics Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
