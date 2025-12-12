@@ -179,6 +179,27 @@ worder/
 
 ## 🔌 Integrations
 
+### 📊 Ads Platforms (NEW!)
+
+#### Facebook Ads (Meta)
+1. Create app at [Meta for Developers](https://developers.facebook.com/apps/)
+2. Add "Marketing API" product
+3. Configure OAuth redirect URI: `https://your-domain.com/api/integrations/meta/callback`
+4. Set `META_APP_ID` and `META_APP_SECRET` in `.env.local`
+
+#### Google Ads
+1. Create project at [Google Cloud Console](https://console.cloud.google.com/)
+2. Enable Google Ads API
+3. Create OAuth 2.0 credentials
+4. Get Developer Token at [Google Ads API Center](https://ads.google.com/aw/apicenter)
+5. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_ADS_DEVELOPER_TOKEN`
+
+#### TikTok Ads
+1. Create app at [TikTok Business API Portal](https://business-api.tiktok.com/portal/apps)
+2. Request Marketing API access
+3. Configure OAuth redirect URI: `https://your-domain.com/api/integrations/tiktok/callback`
+4. Set `TIKTOK_APP_ID` and `TIKTOK_APP_SECRET`
+
 ### Shopify Setup
 
 1. Create a Shopify app at [partners.shopify.com](https://partners.shopify.com)
@@ -234,6 +255,10 @@ The app uses a custom dark theme with glass morphism effects:
 | `/api/deals` | CRUD | Deal/pipeline management |
 | `/api/automations` | CRUD | Automation workflows |
 | `/api/analytics` | GET | Dashboard metrics |
+| `/api/dashboard/metrics` | GET | Aggregated dashboard data |
+| `/api/integrations/meta` | GET/POST/DELETE | Facebook Ads integration |
+| `/api/integrations/google` | GET/POST/DELETE | Google Ads integration |
+| `/api/integrations/tiktok` | GET/POST/DELETE | TikTok Ads integration |
 
 ---
 

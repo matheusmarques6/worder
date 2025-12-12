@@ -77,16 +77,18 @@ const integrations = [
     status: 'healthy',
     lastSync: '5 min atrás',
     stats: { orders: '12.5k', customers: '8.2k', products: '450' },
+    category: 'ecommerce',
   },
   {
     id: 'klaviyo',
     name: 'Klaviyo',
-    description: 'Importe campanhas, flows e métricas',
+    description: 'Importe campanhas, flows e métricas de email',
     icon: KlaviyoIcon,
     connected: true,
     status: 'healthy',
     lastSync: '10 min atrás',
     stats: { campaigns: '45', flows: '12', contacts: '24.5k' },
+    category: 'email',
   },
   {
     id: 'whatsapp',
@@ -98,33 +100,147 @@ const integrations = [
     lastSync: '1 hora atrás',
     stats: { messages: '5.2k', templates: '8' },
     warning: 'Limite de mensagens próximo (85%)',
+    category: 'messaging',
   },
   {
     id: 'meta',
-    name: 'Meta Ads',
-    description: 'Sincronize públicos e acompanhe ROAS',
-    icon: () => (
-      <div className="w-6 h-6 bg-[#1877F2] rounded flex items-center justify-center">
-        <span className="text-white font-bold text-sm">f</span>
-      </div>
-    ),
-    connected: false,
-    status: 'disconnected',
-  },
-  {
-    id: 'google',
-    name: 'Google Analytics',
-    description: 'Acompanhe tráfego e conversões',
+    name: 'Facebook Ads',
+    description: 'Acompanhe campanhas, ROAS e performance de anúncios',
     icon: () => (
       <svg viewBox="0 0 24 24" className="w-6 h-6">
-        <path fill="#F9AB00" d="M12 2L2 7l10 5 10-5-10-5z" />
-        <path fill="#E37400" d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+        <circle cx="12" cy="12" r="12" fill="#1877F2"/>
+        <path fill="white" d="M16.5 12.5h-2.5v8h-3v-8h-2v-2.5h2v-1.5c0-2.5 1-4 3.5-4h2.5v2.5h-1.5c-1 0-1.5.5-1.5 1.5v1.5h3l-.5 2.5z"/>
       </svg>
     ),
     connected: false,
     status: 'disconnected',
+    category: 'ads',
+  },
+  {
+    id: 'google',
+    name: 'Google Ads',
+    description: 'Sincronize campanhas Search, Shopping e Display',
+    icon: () => (
+      <svg viewBox="0 0 24 24" className="w-6 h-6">
+        <path fill="#FBBC04" d="M12 11.5l8.5-5c.8-.5 1.9.1 1.9 1v9c0 .9-1.1 1.5-1.9 1l-8.5-5"/>
+        <path fill="#4285F4" d="M1.5 17.5v-11c0-.9 1-1.5 1.9-1l8.6 5-8.6 5c-.9.5-1.9-.1-1.9-1"/>
+        <path fill="#34A853" d="M12 11.5l8.5 5c.8.5.8 1.6 0 2l-8.5 5c-.8.5-1.9-.1-1.9-1v-10c0-.9 1-1.5 1.9-1"/>
+        <path fill="#EA4335" d="M12 11.5l-8.6-5c-.9-.5-.9-1.6 0-2l8.6-5c.9-.5 1.9.1 1.9 1v10c0 .9-1 1.5-1.9 1"/>
+      </svg>
+    ),
+    connected: false,
+    status: 'disconnected',
+    category: 'ads',
+  },
+  {
+    id: 'tiktok',
+    name: 'TikTok Ads',
+    description: 'Monitore campanhas e performance de vídeos',
+    icon: () => (
+      <svg viewBox="0 0 24 24" className="w-6 h-6">
+        <rect width="24" height="24" rx="4" fill="#000"/>
+        <path fill="#25F4EE" d="M16.5 8.5c-1-.5-1.5-1.5-1.5-2.5h-2v10c0 1.5-1.5 2.5-3 2.5s-2.5-1.5-2.5-2.5c0-1.5 1-2.5 2.5-2.5v-2c-2.5 0-4.5 2-4.5 4.5s2 4.5 4.5 4.5 4.5-2 4.5-4.5v-5c1 .5 2 1 3 1v-2c-.5 0-1-.5-1-.5z"/>
+        <path fill="#FE2C55" d="M17.5 8c-1-.5-1.5-1.5-1.5-2.5h-2v10c0 1.5-1.5 2.5-3 2.5s-2.5-1.5-2.5-2.5c0-1.5 1-2.5 2.5-2.5v-2c-2.5 0-4.5 2-4.5 4.5s2 4.5 4.5 4.5 4.5-2 4.5-4.5v-5c1 .5 2 1 3 1v-2c-.5 0-1-.5-1-.5z"/>
+      </svg>
+    ),
+    connected: false,
+    status: 'disconnected',
+    category: 'ads',
   },
 ];
+
+// Integration Card Component
+const IntegrationCard = ({ integration }: { integration: typeof integrations[0] }) => {
+  const handleConnect = async () => {
+    // Redirect to OAuth flow
+    if (['meta', 'google', 'tiktok'].includes(integration.id)) {
+      try {
+        const response = await fetch(
+          `/api/integrations/${integration.id}?action=auth_url&organizationId=demo-org`
+        );
+        const data = await response.json();
+        if (data.authUrl) {
+          window.location.href = data.authUrl;
+        }
+      } catch (error) {
+        console.error('Failed to start OAuth:', error);
+      }
+    } else if (integration.id === 'shopify') {
+      // Shopify OAuth
+      window.location.href = `/api/shopify?action=auth_url&organizationId=demo-org`;
+    } else if (integration.id === 'klaviyo') {
+      // Modal to enter API key
+      alert('Configure Klaviyo API key in settings');
+    }
+  };
+
+  return (
+    <Card variant="glass" className="p-4">
+      <div className="flex items-start gap-4">
+        <div className="p-2 bg-slate-800/50 rounded-xl">
+          <integration.icon />
+        </div>
+        
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-white">{integration.name}</h3>
+            {integration.connected ? (
+              <Badge variant={integration.status === 'healthy' ? 'success' : 'warning'}>
+                {integration.status === 'healthy' ? 'Conectado' : 'Atenção'}
+              </Badge>
+            ) : (
+              <Badge variant="default">Desconectado</Badge>
+            )}
+          </div>
+          <p className="text-sm text-slate-400 mt-1">{integration.description}</p>
+          
+          {integration.connected && (
+            <>
+              <div className="flex items-center gap-4 mt-3">
+                {integration.stats && Object.entries(integration.stats).map(([key, value]) => (
+                  <div key={key} className="text-sm">
+                    <span className="text-slate-500 capitalize">{key}: </span>
+                    <span className="text-white font-medium">{value}</span>
+                  </div>
+                ))}
+              </div>
+              {integration.warning && (
+                <div className="flex items-center gap-2 mt-2 p-2 bg-amber-500/10 rounded-lg">
+                  <AlertCircle className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs text-amber-400">{integration.warning}</span>
+                </div>
+              )}
+              <p className="text-xs text-slate-500 mt-2">
+                Última sincronização: {integration.lastSync}
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {integration.connected ? (
+            <>
+              <Button variant="ghost" size="sm">
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm">
+                <Settings className="w-4 h-4" />
+              </Button>
+              <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300">
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </>
+          ) : (
+            <Button variant="primary" size="sm" onClick={handleConnect}>
+              <Plus className="w-4 h-4 mr-1" />
+              Conectar
+            </Button>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+};
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
@@ -275,73 +391,54 @@ export default function SettingsPage() {
 
               {/* Integrations Tab */}
               {activeTab === 'integrations' && (
-                <div className="space-y-4">
-                  {integrations.map((integration) => (
-                    <Card key={integration.id} variant="glass" className="p-4">
-                      <div className="flex items-start gap-4">
-                        <div className="p-2 bg-slate-800/50 rounded-xl">
-                          <integration.icon />
-                        </div>
-                        
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-white">{integration.name}</h3>
-                            {integration.connected ? (
-                              <Badge variant={integration.status === 'healthy' ? 'success' : 'warning'}>
-                                {integration.status === 'healthy' ? 'Conectado' : 'Atenção'}
-                              </Badge>
-                            ) : (
-                              <Badge variant="default">Desconectado</Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-slate-400 mt-1">{integration.description}</p>
-                          
-                          {integration.connected && (
-                            <>
-                              <div className="flex items-center gap-4 mt-3">
-                                {integration.stats && Object.entries(integration.stats).map(([key, value]) => (
-                                  <div key={key} className="text-sm">
-                                    <span className="text-slate-500 capitalize">{key}: </span>
-                                    <span className="text-white font-medium">{value}</span>
-                                  </div>
-                                ))}
-                              </div>
-                              {integration.warning && (
-                                <div className="flex items-center gap-2 mt-2 p-2 bg-amber-500/10 rounded-lg">
-                                  <AlertCircle className="w-4 h-4 text-amber-400" />
-                                  <span className="text-xs text-amber-400">{integration.warning}</span>
-                                </div>
-                              )}
-                              <p className="text-xs text-slate-500 mt-2">
-                                Última sincronização: {integration.lastSync}
-                              </p>
-                            </>
-                          )}
-                        </div>
+                <div className="space-y-6">
+                  {/* Ads Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                      📊 Plataformas de Anúncios
+                    </h3>
+                    <div className="space-y-3">
+                      {integrations.filter(i => i.category === 'ads').map((integration) => (
+                        <IntegrationCard key={integration.id} integration={integration} />
+                      ))}
+                    </div>
+                  </div>
 
-                        <div className="flex items-center gap-2">
-                          {integration.connected ? (
-                            <>
-                              <Button variant="ghost" size="sm">
-                                <RefreshCw className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="sm">
-                                <Settings className="w-4 h-4" />
-                              </Button>
-                              <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300">
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <Button variant="primary" size="sm">
-                              <Plus className="w-4 h-4 mr-1" />
-                              Conectar
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
+                  {/* E-commerce Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                      🛒 E-commerce
+                    </h3>
+                    <div className="space-y-3">
+                      {integrations.filter(i => i.category === 'ecommerce').map((integration) => (
+                        <IntegrationCard key={integration.id} integration={integration} />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Email Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                      ✉️ Email Marketing
+                    </h3>
+                    <div className="space-y-3">
+                      {integrations.filter(i => i.category === 'email').map((integration) => (
+                        <IntegrationCard key={integration.id} integration={integration} />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Messaging Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                      💬 Mensagens
+                    </h3>
+                    <div className="space-y-3">
+                      {integrations.filter(i => i.category === 'messaging').map((integration) => (
+                        <IntegrationCard key={integration.id} integration={integration} />
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
