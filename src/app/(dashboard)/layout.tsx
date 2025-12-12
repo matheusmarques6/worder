@@ -137,6 +137,19 @@ export default function DashboardLayout({
     setMobileOpen(false)
   }, [pathname])
 
+  // Listen for openAddStoreModal event from other components
+  useEffect(() => {
+    const handleOpenAddStoreModal = () => {
+      setAddStoreModalOpen(true)
+    }
+    
+    window.addEventListener('openAddStoreModal', handleOpenAddStoreModal)
+    
+    return () => {
+      window.removeEventListener('openAddStoreModal', handleOpenAddStoreModal)
+    }
+  }, [])
+
   const NavLink = ({ item }: { item: { name: string; href: string; icon: any } }) => {
     const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
     const Icon = item.icon
