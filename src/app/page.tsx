@@ -17,23 +17,26 @@ import {
   CheckCircle,
   TrendingUp,
   DollarSign,
+  AlertCircle,
 } from 'lucide-react';
 
 // Worder Logo Component
 const WorderLogo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
+  // Logo original: 900x173 (proporção ~5.2:1)
   const sizes = {
-    sm: 28,
-    md: 40,
-    lg: 56,
+    sm: { width: 100, height: 19 },
+    md: { width: 130, height: 25 },
+    lg: { width: 180, height: 35 },
   };
   
   return (
     <Image
       src="/logo.png"
       alt="Worder"
-      width={sizes[size]}
-      height={sizes[size]}
+      width={sizes[size].width}
+      height={sizes[size].height}
       className="object-contain"
+      priority
     />
   );
 };
@@ -44,13 +47,40 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate login
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    router.push('/dashboard');
+    setError('');
+
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'login',
+          email,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao fazer login');
+      }
+
+      // Redirect to dashboard on success
+      router.push('/dashboard');
+      router.refresh();
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err.message || 'Erro ao fazer login. Verifique suas credenciais.');
+      setIsLoading(false);
+    }
   };
 
   const features = [
@@ -70,14 +100,9 @@ export default function LoginPage() {
           className="w-full max-w-md"
         >
           {/* Logo */}
-          <div className="flex items-center gap-3 mb-8">
+          <div className="flex flex-col gap-1 mb-8">
             <WorderLogo size="md" />
-            <div className="ml-1">
-              <h1 className="text-2xl font-bold text-white">
-                Worder
-              </h1>
-              <p className="text-xs text-dark-500">by Convertfy</p>
-            </div>
+            <p className="text-xs text-dark-500">by Convertfy</p>
           </div>
 
           {/* Welcome Text */}
@@ -144,6 +169,13 @@ export default function LoginPage() {
               </a>
             </div>
 
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={isLoading}
@@ -196,9 +228,9 @@ export default function LoginPage() {
             transition={{ delay: 0.2 }}
           >
             {/* Large Logo */}
-            <div className="flex items-center gap-4 mb-8">
+            <div className="mb-8">
               <WorderLogo size="lg" />
-              <span className="text-4xl font-bold text-white">Worder</span>
+              <p className="text-sm text-dark-500 mt-1">by Convertfy</p>
             </div>
             
             <h2 className="text-3xl font-bold text-white mb-4">

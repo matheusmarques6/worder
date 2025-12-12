@@ -113,23 +113,24 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-dark-700/50">
-        <Link href="/dashboard" className="flex items-center gap-2">
+        <Link href="/dashboard" className="flex flex-col gap-0.5">
           <Image
             src="/logo.png"
             alt="Worder"
-            width={32}
-            height={32}
+            width={sidebarCollapsed ? 40 : 110}
+            height={sidebarCollapsed ? 8 : 21}
             className="object-contain"
+            priority
           />
           <AnimatePresence>
             {!sidebarCollapsed && (
               <motion.span
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                className="text-xl font-bold text-white overflow-hidden ml-1"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-[10px] text-dark-500"
               >
-                Worder
+                by Convertfy
               </motion.span>
             )}
           </AnimatePresence>

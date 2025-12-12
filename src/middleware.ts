@@ -8,6 +8,9 @@ const publicRoutes = ['/', '/api/auth', '/api/shopify', '/api/klaviyo', '/api/wh
 // Routes that should redirect to dashboard if already authenticated
 const authRoutes = ['/'];
 
+// Check if we're in dev mode
+const isDevMode = process.env.NODE_ENV === 'development' || process.env.DEV_AUTH_BYPASS === 'true';
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -35,20 +38,33 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Verify token is still valid
+  // Dev mode: allow dev tokens through
+  if (accessToken === 'dev-access-token') {
+    return NextResponse.next();
+  }
+
+  // Verify token is still valid (only for real tokens)
   if (accessToken && !isPublicRoute) {
+    // Check if Supabase is configured
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('placeholder')) {
+      // Supabase not configured, allow through if in dev mode
+      if (isDevMode) {
+        return NextResponse.next();
+      }
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+
     try {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          global: {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
+      const supabase = createClient(supabaseUrl, supabaseKey, {
+        global: {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
           },
-        }
-      );
+        },
+      });
 
       const { data: { user }, error } = await supabase.auth.getUser();
 

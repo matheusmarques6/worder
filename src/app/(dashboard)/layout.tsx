@@ -31,19 +31,21 @@ import {
 
 // Worder Logo Component
 const WorderLogo = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
+  // Logo original: 900x173 (proporção ~5.2:1)
   const sizes = {
-    sm: 24,
-    md: 32,
-    lg: 48,
+    sm: { width: 80, height: 15 },
+    md: { width: 110, height: 21 },
+    lg: { width: 150, height: 29 },
   };
   
   return (
     <Image
       src="/logo.png"
       alt="Worder"
-      width={sizes[size]}
-      height={sizes[size]}
+      width={sizes[size].width}
+      height={sizes[size].height}
       className="object-contain"
+      priority
     />
   );
 };
@@ -126,21 +128,18 @@ export default function DashboardLayout({
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="p-4 border-b border-dark-800/50">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <WorderLogo size="md" />
+        <Link href="/dashboard" className="flex flex-col gap-0.5">
+          <WorderLogo size={collapsed ? 'sm' : 'md'} />
           <AnimatePresence mode="wait">
             {!collapsed && (
-              <motion.div
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="ml-1"
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-[10px] text-dark-500"
               >
-                <h1 className="text-xl font-bold text-white">
-                  Worder
-                </h1>
-                <p className="text-[10px] text-dark-500 -mt-0.5">by Convertfy</p>
-              </motion.div>
+                by Convertfy
+              </motion.p>
             )}
           </AnimatePresence>
         </Link>
