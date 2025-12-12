@@ -11,6 +11,67 @@ import type {
 } from '@/types'
 
 // ===============================
+// STORE (SHOPIFY) STORE
+// ===============================
+export interface ShopifyStore {
+  id: string
+  name: string
+  domain: string
+  email?: string
+  currency?: string
+  isActive: boolean
+  totalOrders?: number
+  totalRevenue?: number
+  lastSyncAt?: string
+}
+
+interface StoreState {
+  stores: ShopifyStore[]
+  currentStore: ShopifyStore | null
+  isLoading: boolean
+  
+  setStores: (stores: ShopifyStore[]) => void
+  setCurrentStore: (store: ShopifyStore | null) => void
+  addStore: (store: ShopifyStore) => void
+  updateStore: (id: string, data: Partial<ShopifyStore>) => void
+  removeStore: (id: string) => void
+  setLoading: (loading: boolean) => void
+}
+
+export const useStoreStore = create<StoreState>()(
+  persist(
+    (set) => ({
+      stores: [],
+      currentStore: null,
+      isLoading: false,
+      
+      setStores: (stores) => set({ stores }),
+      setCurrentStore: (currentStore) => set({ currentStore }),
+      addStore: (store) => set((state) => ({ 
+        stores: [...state.stores, store],
+        currentStore: state.currentStore || store, // Auto-select if first store
+      })),
+      updateStore: (id, data) => set((state) => ({
+        stores: state.stores.map((s) => (s.id === id ? { ...s, ...data } : s)),
+        currentStore: state.currentStore?.id === id 
+          ? { ...state.currentStore, ...data } 
+          : state.currentStore,
+      })),
+      removeStore: (id) => set((state) => ({
+        stores: state.stores.filter((s) => s.id !== id),
+        currentStore: state.currentStore?.id === id 
+          ? state.stores.find(s => s.id !== id) || null 
+          : state.currentStore,
+      })),
+      setLoading: (isLoading) => set({ isLoading }),
+    }),
+    {
+      name: 'worder-stores',
+    }
+  )
+)
+
+// ===============================
 // AUTH STORE
 // ===============================
 interface AuthState {
