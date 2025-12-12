@@ -58,44 +58,81 @@ export async function POST(request: NextRequest) {
   try {
     const { name, domain, accessToken, apiSecret, organizationId } = await request.json();
 
-    if (!name || !domain || !accessToken) {
+    // Validação - API Secret agora é obrigatória
+    if (!name || !domain || !accessToken || !apiSecret) {
       return NextResponse.json(
-        { error: 'Nome, domínio e access token são obrigatórios' },
+        { error: 'Nome, domínio, access token e API secret são obrigatórios' },
         { status: 400 }
       );
     }
 
-    // Format domain
-    const shopDomain = domain.includes('.myshopify.com') 
-      ? domain 
-      : `${domain}.myshopify.com`;
+    // Format domain - remover espaços e caracteres extras
+    const cleanDomain = domain.trim().toLowerCase().replace(/\s+/g, '');
+    const shopDomain = cleanDomain.includes('.myshopify.com') 
+      ? cleanDomain 
+      : `${cleanDomain}.myshopify.com`;
+
+    console.log('Connecting to Shopify store:', shopDomain);
 
     // Verify access token by fetching shop info
-    const shopResponse = await fetch(
-      `https://${shopDomain}/admin/api/2024-01/shop.json`,
-      {
-        headers: {
-          'X-Shopify-Access-Token': accessToken,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    let shopResponse;
+    try {
+      shopResponse = await fetch(
+        `https://${shopDomain}/admin/api/2024-01/shop.json`,
+        {
+          method: 'GET',
+          headers: {
+            'X-Shopify-Access-Token': accessToken.trim(),
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    } catch (fetchError: any) {
+      console.error('Fetch error:', fetchError);
+      return NextResponse.json(
+        { error: `Erro de conexão: ${fetchError.message}. Verifique se o domínio está correto.` },
+        { status: 400 }
+      );
+    }
 
     if (!shopResponse.ok) {
-      const errorData = await shopResponse.json().catch(() => ({}));
+      const errorText = await shopResponse.text();
+      console.error('Shopify API error:', shopResponse.status, errorText);
+      
       if (shopResponse.status === 401) {
         return NextResponse.json(
-          { error: 'Access Token inválido. Verifique e tente novamente.' },
+          { error: 'Access Token inválido ou expirado. Gere um novo token no Shopify Admin.' },
           { status: 401 }
         );
       }
+      if (shopResponse.status === 404) {
+        return NextResponse.json(
+          { error: `Loja não encontrada: ${shopDomain}. Verifique o domínio.` },
+          { status: 404 }
+        );
+      }
+      if (shopResponse.status === 403) {
+        return NextResponse.json(
+          { error: 'Acesso negado. Verifique as permissões do app no Shopify.' },
+          { status: 403 }
+        );
+      }
       return NextResponse.json(
-        { error: 'Não foi possível conectar à loja. Verifique o domínio e o token.' },
+        { error: `Erro Shopify (${shopResponse.status}): ${errorText.substring(0, 100)}` },
         { status: 400 }
       );
     }
 
-    const { shop: shopData } = await shopResponse.json();
+    let shopData;
+    try {
+      const jsonResponse = await shopResponse.json();
+      shopData = jsonResponse.shop;
+    } catch (parseError) {
+      return NextResponse.json(
+        { error: 'Erro ao processar resposta do Shopify' },
+        { status: 500 }
+      );
+    }
 
     // Get organization ID from request or create/get default
     let orgId = organizationId;
@@ -116,8 +153,8 @@ export async function POST(request: NextRequest) {
         .from('shopify_stores')
         .update({
           shop_name: name,
-          access_token: accessToken,
-          api_secret: apiSecret || null,
+          access_token: accessToken.trim(),
+          api_secret: apiSecret.trim(),
           shop_email: shopData.email,
           currency: shopData.currency,
           timezone: shopData.timezone,
@@ -127,6 +164,9 @@ export async function POST(request: NextRequest) {
         .eq('id', existingStore.id);
 
       if (updateError) throw updateError;
+
+      // Register webhooks
+      registerWebhooks(shopDomain, accessToken.trim()).catch(console.error);
 
       return NextResponse.json({
         success: true,
@@ -147,8 +187,8 @@ export async function POST(request: NextRequest) {
         shop_domain: shopDomain,
         shop_name: name,
         shop_email: shopData.email,
-        access_token: accessToken,
-        api_secret: apiSecret || null,
+        access_token: accessToken.trim(),
+        api_secret: apiSecret.trim(),
         currency: shopData.currency,
         timezone: shopData.timezone,
         is_active: true,
@@ -160,12 +200,10 @@ export async function POST(request: NextRequest) {
     if (insertError) throw insertError;
 
     // Trigger initial data sync (async)
-    syncStoreData(newStore.id, shopDomain, accessToken).catch(console.error);
+    syncStoreData(newStore.id, shopDomain, accessToken.trim()).catch(console.error);
 
-    // If API secret is provided, register webhooks
-    if (apiSecret) {
-      registerWebhooks(shopDomain, accessToken).catch(console.error);
-    }
+    // Register webhooks
+    registerWebhooks(shopDomain, accessToken.trim()).catch(console.error);
 
     return NextResponse.json({
       success: true,
