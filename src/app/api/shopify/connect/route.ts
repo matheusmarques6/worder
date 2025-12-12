@@ -18,7 +18,7 @@ const supabase = new Proxy({} as SupabaseClient, {
 // Connect store via Access Token (custom app method)
 export async function POST(request: NextRequest) {
   try {
-    const { name, domain, accessToken, organizationId } = await request.json();
+    const { name, domain, accessToken, apiSecret, organizationId } = await request.json();
 
     if (!name || !domain || !accessToken) {
       return NextResponse.json(
@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
         .update({
           shop_name: name,
           access_token: accessToken,
+          api_secret: apiSecret || null,
           shop_email: shopData.email,
           currency: shopData.currency,
           timezone: shopData.timezone,
@@ -107,6 +108,7 @@ export async function POST(request: NextRequest) {
         shop_name: name,
         shop_email: shopData.email,
         access_token: accessToken,
+        api_secret: apiSecret || null,
         currency: shopData.currency,
         timezone: shopData.timezone,
         is_active: true,
@@ -119,6 +121,11 @@ export async function POST(request: NextRequest) {
 
     // Trigger initial data sync (async)
     syncStoreData(newStore.id, shopDomain, accessToken).catch(console.error);
+
+    // If API secret is provided, register webhooks
+    if (apiSecret) {
+      registerWebhooks(shopDomain, accessToken).catch(console.error);
+    }
 
     return NextResponse.json({
       success: true,
@@ -135,6 +142,44 @@ export async function POST(request: NextRequest) {
       { error: error.message || 'Erro ao conectar loja' },
       { status: 500 }
     );
+  }
+}
+
+// Register Shopify webhooks
+async function registerWebhooks(shopDomain: string, accessToken: string) {
+  const webhooksToCreate = [
+    'orders/create',
+    'orders/updated',
+    'customers/create',
+    'customers/update',
+    'checkouts/create',
+    'checkouts/update',
+    'products/create',
+    'products/update',
+    'inventory_levels/update',
+  ];
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL;
+  
+  for (const topic of webhooksToCreate) {
+    try {
+      await fetch(`https://${shopDomain}/admin/api/2024-01/webhooks.json`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': accessToken,
+        },
+        body: JSON.stringify({
+          webhook: {
+            topic,
+            address: `${appUrl}/api/shopify/webhooks`,
+            format: 'json',
+          },
+        }),
+      });
+    } catch (err) {
+      console.error(`Failed to register webhook ${topic}:`, err);
+    }
   }
 }
 

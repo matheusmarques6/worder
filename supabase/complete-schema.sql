@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS shopify_stores (
   shop_name TEXT,
   shop_email TEXT,
   access_token TEXT NOT NULL,
+  api_secret TEXT,
   scope TEXT,
   currency TEXT DEFAULT 'BRL',
   timezone TEXT,
